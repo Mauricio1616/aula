@@ -66,13 +66,65 @@
         .room-pill.error { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
         .room-pill.warning { background: #ffedd5; border-color: #fdba74; color: #c2410c; }
 
-        /* --- ESTILOS DE EXPORTACIÓN --- */
-        .export-mode { background-color: white !important; padding: 20px !important; width: fit-content !important; min-width: 100% !important; overflow: visible !important; }
-        .export-mode table { width: 100% !important; min-width: 1000px !important; border-collapse: collapse !important; border: 1px solid #000 !important; table-layout: fixed !important; }
-        .export-mode th { background-color: #0f172a !important; color: #fff !important; border: 1px solid #000 !important; font-size: 11px !important; padding: 5px !important; }
-        .export-mode td { height: auto !important; min-height: 40px !important; border: 1px solid #ccc !important; padding: 4px !important; }
-        .export-mode td:first-child { background-color: #f1f5f9 !important; color: #000 !important; width: 60px !important; }
-        .export-mode .room-pill { background: none !important; border: none !important; box-shadow: none !important; color: #000 !important; padding: 0 !important; font-size: 9px !important; }
+        /* --- ESTILOS DE EXPORTACIÓN (NUEVOS - MODO CLON) --- */
+        .export-mode { 
+            position: absolute !important;
+            top: -9999px !important;
+            left: -9999px !important;
+            width: 1400px !important; /* Forzamos un ancho grande para que ningún texto se corte */
+            height: auto !important; 
+            overflow: visible !important; 
+            background-color: white !important; 
+            padding: 30px !important; 
+            z-index: -100 !important;
+        }
+        .export-mode table { 
+            width: 100% !important; 
+            border-collapse: collapse !important; 
+            border: 2px solid #1e293b !important; 
+            table-layout: fixed !important; 
+        }
+        .export-mode th { 
+            background-color: #0f172a !important; 
+            color: #fff !important; 
+            border: 1px solid #1e293b !important; 
+            font-size: 13px !important; 
+            padding: 10px !important; 
+            position: static !important; /* Quitamos el sticky para evitar cortes en la foto */
+        }
+        .export-mode td { 
+            height: auto !important; 
+            min-height: 60px !important; 
+            border: 1px solid #cbd5e1 !important; 
+            padding: 6px !important; 
+            position: static !important; 
+        }
+        .export-mode td:first-child { 
+            background-color: #f1f5f9 !important; 
+            color: #1e293b !important; 
+            width: 80px !important; 
+            position: static !important;
+        }
+        /* Magia: Forzamos a que los textos NO se corten con (...) */
+        .export-mode .truncate { 
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+        }
+        .export-mode .subject-cell-content {
+            padding: 6px !important;
+            border: 1px solid #e2e8f0 !important;
+            box-shadow: none !important;
+        }
+        .export-mode .room-pill { 
+            background: none !important; 
+            border: none !important; 
+            box-shadow: none !important; 
+            color: #000 !important; 
+            padding: 0 !important; 
+            font-size: 11px !important; 
+            margin-top: 6px !important;
+        }
     </style>
 </head>
 <body class="p-2 sm:p-4 md:p-6 min-h-screen flex flex-col gap-4 max-w-[1600px] mx-auto">
@@ -851,59 +903,96 @@
         };
 
         const prepareExportView = () => {
-            const originalWidth = horarioPdfWrapper.style.width;
-            const originalOverflow = horarioPdfWrapper.style.overflow;
-            horarioPdfWrapper.style.width = "fit-content"; 
-            horarioPdfWrapper.style.overflow = "visible"; 
-            horarioPdfWrapper.classList.add('export-mode');
-            document.querySelectorAll('.no-export').forEach(el => el.style.display = 'none');
-            return { originalWidth, originalOverflow };
+            // En lugar de achicar la tabla real, creamos un CLON perfecto y lo preparamos
+            const clone = horarioPdfWrapper.cloneNode(true);
+            clone.id = 'export-clone';
+            clone.classList.add('export-mode');
+            
+            // Ocultamos los lapicitos para que el PDF se vea limpio
+            clone.querySelectorAll('.no-export').forEach(el => el.style.display = 'none');
+            
+            // Lo pegamos al body, pero gracias al CSS estará fuera de pantalla (-9999px)
+            document.body.appendChild(clone);
+            return clone;
         };
 
-        const restoreExportView = (backup) => {
-            horarioPdfWrapper.classList.remove('export-mode');
-            horarioPdfWrapper.style.width = backup.originalWidth;
-            horarioPdfWrapper.style.overflow = backup.originalOverflow;
-            document.querySelectorAll('.no-export').forEach(el => el.style.display = '');
+        const cleanupExportView = (clone) => {
+            // Una vez tomada la foto, borramos el clon
+            if (clone && clone.parentNode) {
+                clone.parentNode.removeChild(clone);
+            }
         };
 
         const exportToPdf = async () => {
             if (!activeGroupTab) { alert("Sincroniza los datos primero."); return; }
-            const { jsPDF } = window.jspdf;
-            const backup = prepareExportView(); 
+            const clone = prepareExportView(); 
             try {
-                const canvas = await html2canvas(horarioPdfWrapper, { scale: 2, useCORS: true });
-                const imgData = canvas.toDataURL("image/png");
+                // Tomamos la foto al clon con ancho forzado de 1400px
+                const canvas = await html2canvas(clone, { 
+                    scale: 2, 
+                    useCORS: true,
+                    windowWidth: 1400 
+                });
+                
+                const imgData = canvas.toDataURL("image/jpeg", 0.95);
+                const { jsPDF } = window.jspdf;
                 const pdf = new jsPDF("l", "mm", "a4"); 
+                
                 const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                
                 pdf.setFont("helvetica", "bold");
-                pdf.setFontSize(14);
+                pdf.setFontSize(16);
                 
                 const prefixTitle = groupingModeSelect.value === 'AULA' ? 'Aula:' : 'Horario:';
                 pdf.text(`${prefixTitle} ${activeGroupTab}`, pageWidth / 2, 15, { align: "center" });
                 
-                const imgWidth = pageWidth - 20; 
+                const margin = 10;
+                const headerHeight = 25; // Altura a la que empieza la imagen para no tapar el título
+                const availableWidth = pageWidth - (margin * 2);
+                
+                const imgWidth = availableWidth; 
                 const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                pdf.addImage(imgData, "PNG", 10, 25, imgWidth, imgHeight);
+                
+                let heightLeft = imgHeight;
+                let position = headerHeight;
+                
+                // Imprimir primera página
+                pdf.addImage(imgData, "JPEG", margin, position, imgWidth, imgHeight);
+                heightLeft -= (pageHeight - headerHeight);
+
+                // Lógica Multi-Página por si el horario es súper largo (muchos turnos)
+                while (heightLeft > 0) {
+                    position -= pageHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, "JPEG", margin, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+                
                 pdf.save(`Horario_${activeGroupTab.replace(/\s+/g, '_')}.pdf`);
             } catch (err) {
-                console.error(err); alert("Error al generar PDF.");
+                console.error(err); 
+                alert("Error al generar PDF.");
             } finally {
-                restoreExportView(backup);
+                cleanupExportView(clone);
             }
         };
 
         const exportToImage = async () => {
             if (!activeGroupTab) { alert("Sincroniza los datos primero."); return; }
-            const backup = prepareExportView(); 
+            const clone = prepareExportView(); 
             try {
-                const canvas = await html2canvas(horarioPdfWrapper, { scale: 2, useCORS: true });
+                const canvas = await html2canvas(clone, { 
+                    scale: 2, 
+                    useCORS: true,
+                    windowWidth: 1400
+                });
                 const link = document.createElement('a');
                 link.download = `Horario_${activeGroupTab.replace(/\s+/g, '_')}.png`;
                 link.href = canvas.toDataURL('image/png');
                 link.click();
             } finally {
-                restoreExportView(backup);
+                cleanupExportView(clone);
             }
         };
 
