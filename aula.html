@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administración de Aulas - Facultad</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9; /* Slate 100 */
+            color: #0f172a;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f8fafc;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        .modal-animate {
+            animation: fadeInScale 0.2s ease-out;
+        }
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* --- ESTILOS DE LA GRILLA DE HORARIOS --- */
+        #schedule-container table {
+            border-collapse: separate; 
+            border-spacing: 0;
+            background: white;
+        }
+
+        #schedule-container th {
+            background-color: #0f172a; /* Slate 900 */
+            color: white;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            border: 1px solid #1e293b;
+            padding: 8px 4px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        @media (min-width: 640px) {
+            #schedule-container th { font-size: 0.85rem; padding: 12px 4px; }
+        }
+
+        #schedule-container td {
+            border: 1px solid #e2e8f0;
+            height: 50px; 
+            vertical-align: top;
+            transition: all 0.2s;
+            position: relative;
+        }
+        @media (min-width: 640px) {
+            #schedule-container td { height: 60px; }
+        }
+
+        /* Columna de Hora */
+        #schedule-container td:first-child {
+            background-color: #f1f5f9;
+            color: #475569;
+            font-weight: 700;
+            font-size: 0.65rem; 
+            vertical-align: middle;
+            width: 60px; 
+            position: sticky;
+            left: 0;
+            z-index: 5;
+        }
+        @media (min-width: 640px) {
+            #schedule-container td:first-child { font-size: 0.75rem; width: 80px; } 
+        }
+
+        /* Tabs de Grupos */
+        .tab {
+            background: white;
+            border: 1px solid #cbd5e1;
+            color: #475569;
+            font-size: 0.75rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+            padding: 6px 12px;
+            font-weight: 500;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+        @media (min-width: 640px) {
+            .tab { font-size: 0.8rem; padding: 6px 16px; }
+        }
+        .tab:hover {
+            background-color: #f1f5f9;
+        }
+        .tab.active {
+            background-color: #0f172a;
+            color: white;
+            border-color: #0f172a;
+        }
+
+        .tab.has-error {
+            border-color: #fca5a5;
+            color: #ef4444;
+            background-color: #fef2f2;
+        }
+        .tab.active.has-error {
+            background-color: #991b1b;
+            color: white;
+            border-color: #991b1b;
+        }
+
+        /* Insignias de Aula en Grilla */
+        .room-pill {
+            background: white;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            padding: 2px 6px;
+            font-size: 0.65rem;
+            color: #475569;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            margin-top: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-family: monospace;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .room-pill:hover {
+            background: #f8fafc;
+            border-color: #94a3b8;
+        }
+        .room-pill.error {
+            background: #fee2e2;
+            border-color: #fca5a5;
+            color: #b91c1c;
+        }
+        .room-pill.warning {
+            background: #ffedd5;
+            border-color: #fdba74;
+            color: #c2410c;
+        }
+
+        /* --- ESTILOS DE EXPORTACIÓN --- */
+        .export-mode {
+            background-color: white !important;
+            padding: 20px !important;
+            width: fit-content !important;
+            min-width: 100% !important;
+            overflow: visible !important;
+        }
+        .export-mode table {
+            width: 100% !important;
+            min-width: 1000px !important;
+            border-collapse: collapse !important;
+            border: 1px solid #000 !important;
+            table-layout: fixed !important; 
+        }
+        .export-mode th {
+            background-color: #0f172a !important; 
+            color: #fff !important;
+            border: 1px solid #000 !important;
+            font-size: 11px !important;
+            padding: 5px !important;
+        }
+        .export-mode td {
+            height: auto !important;
+            min-height: 40px !important;
+            border: 1px solid #ccc !important;
+            padding: 4px !important;
+        }
+        .export-mode td:first-child {
+            background-color: #f1f5f9 !important;
+            color: #000 !important;
+            width: 60px !important; 
+        }
+        .export-mode .room-pill {
+            background: none !important;
+            border: none !important;
+            box-shadow: none !important;
+            color: #000 !important;
+            padding: 0 !important;
+            font-size: 9px !important;
+        }
+    </style>
+</head>
+<body class="p-2 sm:p-4 md:p-6 min-h-screen flex flex-col gap-4 max-w-[1600px] mx-auto">
+
+    <!-- HEADER ADMINISTRATIVO -->
+    <header class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-5 flex flex-col md:flex-row justify-between items-center gap-4 border-l-4 sm:border-l-8 border-l-slate-800">
+        <div class="text-center md:text-left">
+            <h1 class="text-xl sm:text-2xl md:text-3xl font-bold text-slate-800 tracking-tight">Gestor de Aulas y Espacios</h1>
+            <p class="text-slate-500 text-xs sm:text-sm mt-1">Panel de control administrativo • Facultad de Humanidades</p>
+        </div>
+        
+        <div class="flex flex-wrap justify-center gap-2 sm:gap-3 text-xs sm:text-sm w-full md:w-auto">
+            <button id="btn-teachers" class="flex-1 md:flex-none px-3 sm:px-4 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-medium rounded-lg transition flex justify-center items-center gap-2 border border-indigo-300">
+                <span>👨‍🏫</span> Docentes
+            </button>
+            <button id="btn-download-templates" class="flex-1 md:flex-none px-3 sm:px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg transition flex justify-center items-center gap-2 border border-slate-300">
+                <span>⬇️</span> Plantilla
+            </button>
+            <button id="btn-sync" class="flex-1 md:flex-none px-3 sm:px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg shadow transition flex justify-center items-center gap-2">
+                <span>🔄</span> Sincronizar
+            </button>
+        </div>
+    </header>
+
+    <!-- ESTADO DE ARCHIVOS Y DASHBOARD -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <!-- Status Archivos -->
+        <div class="col-span-2 md:col-span-1 bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center">
+            <h3 class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 sm:mb-3">Conexión a Datos</h3>
+            <div class="space-y-1.5 sm:space-y-2">
+                <div class="flex justify-between items-center text-xs sm:text-sm">
+                    <span class="flex items-center gap-1 font-medium text-slate-600 truncate mr-2">📄 horarios.xlsx</span>
+                    <span id="status-horarios" class="text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Esperando...</span>
+                </div>
+                <div class="flex justify-between items-center text-xs sm:text-sm">
+                    <span class="flex items-center gap-1 font-medium text-slate-600 truncate mr-2">📊 capacidad_aula.xlsx</span>
+                    <span id="status-capacidades" class="text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Esperando...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI 1 -->
+        <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-4 text-center sm:text-left">
+            <div class="bg-blue-50 text-blue-600 w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-lg sm:text-xl shadow-inner">📚</div>
+            <div>
+                <p class="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Total Sesiones</p>
+                <p id="kpi-total" class="text-xl sm:text-2xl font-black text-slate-800">0</p>
+            </div>
+        </div>
+
+        <!-- KPI 2 -->
+        <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-4 text-center sm:text-left">
+            <div class="bg-orange-50 text-orange-600 w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-lg sm:text-xl shadow-inner">⚠️</div>
+            <div>
+                <p class="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Sin asignar</p>
+                <p id="kpi-unassigned" class="text-xl sm:text-2xl font-black text-orange-600">0</p>
+            </div>
+        </div>
+
+        <!-- KPI 3 -->
+        <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-4 text-center sm:text-left">
+            <div class="bg-red-50 text-red-600 w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-lg sm:text-xl shadow-inner">🚨</div>
+            <div>
+                <p class="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Choques</p>
+                <p id="kpi-conflicts" class="text-xl sm:text-2xl font-black text-red-600">0</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- VISOR DE GRILLA HORARIA -->
+    <main class="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col flex-1 min-h-[500px] overflow-hidden p-3 sm:p-5">
+        
+        <!-- Pestañas de Grupos -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 sm:mb-4 gap-3">
+            <h2 class="font-bold text-slate-800 flex items-center gap-2">
+                <span>📅</span> Grilla por Grupo
+            </h2>
+            <div class="text-xs text-slate-500 bg-slate-50 px-3 py-1 rounded border border-slate-200 flex gap-4">
+                <span class="flex items-center gap-1"><span class="w-3 h-3 bg-red-100 border border-red-300 rounded block"></span> Choque</span>
+                <span class="flex items-center gap-1"><span class="w-3 h-3 bg-orange-100 border border-orange-300 rounded block"></span> Sin Asignar</span>
+            </div>
+        </div>
+
+        <!-- TABS (Scrollable) -->
+        <div class="overflow-x-auto custom-scrollbar pb-3 mb-2 border-b border-slate-100">
+            <div id="tabs-container" class="flex gap-2 w-max px-1">
+                <p class="text-sm text-slate-400 italic py-2">Carga la oferta para ver los grupos...</p>
+            </div>
+        </div>
+
+        <!-- LA GRILLA -->
+        <div class="relative rounded-sm border border-slate-200 flex-1 flex flex-col bg-slate-50">
+            <div id="horario-pdf" class="bg-white p-1 overflow-x-auto custom-scrollbar flex-1">
+                <div id="schedule-container">
+                    <table class="w-full min-w-[700px] sm:min-w-[900px] text-center text-xs sm:text-sm">
+                        <thead>
+                            <tr>
+                                <th class="w-14 sm:w-20">HORA</th>
+                                <th>LUNES</th>
+                                <th>MARTES</th>
+                                <th>MIÉRC</th>
+                                <th>JUEVES</th>
+                                <th>VIERNES</th>
+                                <th>SÁBADO</th>
+                            </tr>
+                        </thead>
+                        <tbody id="schedule-tbody">
+                            <!-- Se llena con JS -->
+                            <tr>
+                                <td colspan="7" class="py-20 text-slate-400 italic">
+                                    Sincroniza los datos para visualizar la programación.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botones de Exportación -->
+        <div class="flex gap-3 mt-4 justify-end border-t border-slate-200 pt-4">
+            <button id="export-img-btn" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg shadow text-xs flex items-center justify-center gap-1 transition">📸 Descargar Imagen</button>
+            <button id="export-pdf-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow text-xs flex items-center justify-center gap-1 transition">📄 Descargar PDF</button>
+        </div>
+    </main>
+
+    <!-- MODAL DE ASIGNACIÓN DE AULA -->
+    <div id="modal-assign" class="fixed inset-0 bg-slate-900 bg-opacity-75 z-50 hidden justify-center items-center p-2 sm:p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] flex flex-col modal-animate border-t-4 sm:border-t-8 border-slate-800">
+            
+            <!-- Modal Header -->
+            <div class="p-4 sm:p-5 border-b border-slate-200 flex justify-between items-start bg-slate-50 rounded-t-lg">
+                <div>
+                    <h3 class="text-lg sm:text-xl font-bold text-slate-800 mb-1 leading-tight" id="modal-subject-name">Nombre de la Materia</h3>
+                    <div class="flex flex-wrap gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-medium text-slate-500 mt-2">
+                        <span class="bg-white border px-2 py-1 rounded shadow-sm" id="modal-group">Grupo: 1A</span>
+                        <span class="bg-white border px-2 py-1 rounded shadow-sm" id="modal-teacher">Docente</span>
+                        <span class="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded shadow-sm font-bold flex items-center gap-1">🕒 <span id="modal-time">LUNES 07:00-08:30</span></span>
+                    </div>
+                </div>
+                <button id="modal-close-btn" class="text-slate-400 hover:text-red-500 font-bold text-2xl sm:text-xl leading-none">&times;</button>
+            </div>
+
+            <!-- Modal Body (Two columns) -->
+            <div class="flex flex-col md:flex-row flex-1 overflow-hidden">
+                
+                <!-- Left Col: Formulario Manual -->
+                <div class="w-full md:w-1/3 border-b md:border-b-0 md:border-r border-slate-200 p-4 sm:p-5 bg-white flex flex-col gap-3 sm:gap-4 overflow-y-auto">
+                    <div>
+                        <label class="block text-[10px] sm:text-xs font-bold text-slate-500 uppercase mb-1">Aula Actual</label>
+                        <div class="p-2.5 sm:p-3 bg-slate-100 rounded-lg border border-slate-200 font-mono font-bold text-slate-700 text-base sm:text-lg" id="modal-current-room">S/A</div>
+                    </div>
+                    
+                    <hr class="border-slate-100 hidden md:block">
+
+                    <div>
+                        <label class="block text-[10px] sm:text-xs font-bold text-slate-500 uppercase mb-1">Asignación Manual</label>
+                        <p class="text-[9px] sm:text-[10px] text-slate-400 mb-2 leading-tight">Si conoces el código del aula o es externa, escríbelo aquí.</p>
+                        <input type="text" id="manual-room-input" class="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-slate-800 outline-none uppercase font-mono text-sm" placeholder="Ej. AULA 01">
+                        <button id="btn-save-manual" class="w-full mt-2 bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 rounded transition text-xs sm:text-sm">Guardar Manualmente</button>
+                    </div>
+
+                    <div class="mt-1 bg-slate-50 p-2 sm:p-3 rounded-lg border border-slate-200">
+                        <p class="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase mb-1.5">Aplicar cambio a:</p>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="flex items-center gap-2 text-[10px] sm:text-xs text-slate-700 cursor-pointer">
+                                <input type="radio" name="apply-scope" value="single" class="w-3 h-3 sm:w-4 sm:h-4 text-slate-800 focus:ring-slate-800" checked>
+                                <span>Solo a este día (<span id="scope-single-text" class="font-bold text-blue-700"></span>)</span>
+                            </label>
+                            <label class="flex items-center gap-2 text-[10px] sm:text-xs text-slate-700 cursor-pointer">
+                                <input type="radio" name="apply-scope" value="all" class="w-3 h-3 sm:w-4 sm:h-4 text-slate-800 focus:ring-slate-800">
+                                Todos los días de esta materia (Mismo Grupo)
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div id="modal-warnings" class="hidden p-2.5 sm:p-3 bg-red-50 border border-red-200 text-red-700 text-[10px] sm:text-xs rounded-lg mt-auto">
+                        <!-- Alertas de choque aquí -->
+                    </div>
+                </div>
+
+                <!-- Right Col: Buscador Inteligente de Aulas -->
+                <div class="w-full md:w-2/3 bg-slate-50 p-4 sm:p-5 flex flex-col overflow-hidden">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-2 sm:mb-3 gap-2">
+                        <div>
+                            <h4 class="font-bold text-sm sm:text-base text-slate-800">Aulas Disponibles</h4>
+                            <p class="text-[10px] sm:text-xs text-slate-500">Libres en el horario de <span id="modal-time-ref" class="font-bold"></span></p>
+                        </div>
+                        <div class="flex items-center gap-2 bg-white px-2 py-1 rounded border border-slate-200">
+                            <label class="text-[10px] sm:text-xs text-slate-500 font-bold">Capacidad Min:</label>
+                            <input type="number" id="filter-capacity" class="w-16 p-1 border rounded text-xs sm:text-sm text-center outline-none focus:border-blue-500" value="0" min="0" step="5">
+                        </div>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 rounded-lg bg-white">
+                        <table class="w-full text-left text-xs sm:text-sm">
+                            <thead class="bg-slate-100 sticky top-0 shadow-sm z-10">
+                                <tr>
+                                    <th class="p-2 font-semibold text-slate-600 text-[10px] sm:text-xs uppercase">Aula</th>
+                                    <th class="p-2 font-semibold text-slate-600 text-[10px] sm:text-xs uppercase text-center">Capacidad</th>
+                                    <th class="p-2 font-semibold text-slate-600 text-[10px] sm:text-xs uppercase text-center">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="available-rooms-list" class="divide-y divide-slate-100">
+                                <!-- Generado por JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DOCENTES -->
+    <div id="modal-teachers" class="fixed inset-0 bg-slate-900 bg-opacity-75 z-50 hidden justify-center items-center p-2 sm:p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] sm:max-h-[90vh] flex flex-col modal-animate border-t-4 sm:border-t-8 border-indigo-600">
+            <div class="p-4 sm:p-5 border-b border-slate-200 flex justify-between items-start bg-slate-50 rounded-t-lg">
+                <div>
+                    <h3 class="text-lg sm:text-xl font-bold text-slate-800 mb-1">Carga Horaria Docente</h3>
+                    <p class="text-[10px] sm:text-xs text-slate-500 mt-1">Listado de docentes con sus materias y aulas asignadas.</p>
+                </div>
+                <button id="modal-teachers-close" class="text-slate-400 hover:text-red-500 font-bold text-2xl sm:text-xl leading-none">&times;</button>
+            </div>
+            <div class="p-3 sm:p-4 border-b border-slate-200">
+                <input type="text" id="teacher-search" placeholder="Buscar docente, materia o aula..." class="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+            </div>
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4">
+                <table class="w-full text-left text-[10px] sm:text-xs">
+                    <thead class="bg-slate-100 sticky top-0 shadow-sm z-10">
+                        <tr>
+                            <th class="p-2 sm:p-3 font-semibold text-slate-600 uppercase">Docente</th>
+                            <th class="p-2 sm:p-3 font-semibold text-slate-600 uppercase">Materia / Grupo</th>
+                            <th class="p-2 sm:p-3 font-semibold text-slate-600 uppercase">Día y Hora</th>
+                            <th class="p-2 sm:p-3 font-semibold text-slate-600 uppercase text-center">Aula</th>
+                        </tr>
+                    </thead>
+                    <tbody id="teachers-table-body" class="divide-y divide-slate-100 text-slate-700">
+                        <!-- Generado por JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // --- VARIABLES DE ESTADO ---
+    let scheduleData = [];     // Array plano general (para calcular choques y buscar)
+    let groupedData = {};      // Oferta agrupada { "1A": [...], "1B": [...] }
+    let roomCapacities = {};   
+    let currentEditingSession = null; 
+    let activeGroupTab = null;
+
+    // Paleta de colores para materias en la grilla
+    const randomColors = [
+        "#e0f2fe", "#dcfce7", "#f3e8ff", "#ffedd5", "#f1f5f9", "#fee2e2", "#ccfbf1", "#fae8ff", "#fef9c3", "#e0e7ff"
+    ];
+
+    document.addEventListener('DOMContentLoaded', () => {
+        
+        // DOM Elements
+        const btnSync = document.getElementById('btn-sync');
+        const btnDownloadTpl = document.getElementById('btn-download-templates');
+        const statusHorarios = document.getElementById('status-horarios');
+        const statusCapacidades = document.getElementById('status-capacidades');
+        
+        const kpiTotal = document.getElementById('kpi-total');
+        const kpiUnassigned = document.getElementById('kpi-unassigned');
+        const kpiConflicts = document.getElementById('kpi-conflicts');
+        
+        const tabsContainer = document.getElementById('tabs-container');
+        const scheduleTbody = document.getElementById('schedule-tbody');
+
+        // Modal Elements
+        const modal = document.getElementById('modal-assign');
+        const btnCloseModal = document.getElementById('modal-close-btn');
+        const inputManualRoom = document.getElementById('manual-room-input');
+        const btnSaveManual = document.getElementById('btn-save-manual');
+        const inputFilterCapacity = document.getElementById('filter-capacity');
+        const listAvailableRooms = document.getElementById('available-rooms-list');
+
+        // Teacher Modal & Export Elements
+        const modalTeachers = document.getElementById('modal-teachers');
+        const btnTeachers = document.getElementById('btn-teachers');
+        const btnCloseTeachers = document.getElementById('modal-teachers-close');
+        const teacherSearch = document.getElementById('teacher-search');
+        const teachersTableBody = document.getElementById('teachers-table-body');
+        const horarioPdfWrapper = document.getElementById('horario-pdf');
+
+        // --- UTILIDADES ---
+        const timeToMin = (timeStr) => {
+            if(!timeStr || !timeStr.includes(':')) return 0;
+            const [h, m] = timeStr.split(':').map(Number);
+            return (h * 60) + m;
+        };
+
+        const checkTimeOverlap = (timeA, timeB) => {
+            if(!timeA || !timeB || !timeA.includes('-') || !timeB.includes('-')) return false;
+            let startA = timeToMin(timeA.split('-')[0]);
+            let endA = timeToMin(timeA.split('-')[1]);
+            let startB = timeToMin(timeB.split('-')[0]);
+            let endB = timeToMin(timeB.split('-')[1]);
+            return (startA < endB && startB < endA);
+        };
+
+        const formatTime = (excelTime) => {
+            if (!excelTime) return "";
+            if (typeof excelTime === 'string') return excelTime.substring(0, 5); 
+            if (typeof excelTime === 'number') {
+                const totalSeconds = Math.round(excelTime * 86400);
+                const hours = Math.floor(totalSeconds / 3600);
+                const minutes = Math.floor((totalSeconds % 3600) / 60);
+                return `${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}`;
+            }
+            return String(excelTime);
+        };
+
+        // --- PROCESAMIENTO DE EXCEL ---
+        const processCapacidades = (data) => {
+            roomCapacities = {};
+            data.forEach(row => {
+                let aula = row['AULA'] || row['Aula'] || row['NOMBRE'];
+                let cap = row['CAPACIDAD'] || row['Capacidad'] || row['ALUMNOS'];
+                if (aula && cap !== undefined) {
+                    roomCapacities[String(aula).trim().toUpperCase()] = parseInt(cap);
+                }
+            });
+        };
+
+        const processHorarios = (data) => {
+            let sessions = [];
+            let idCounter = 1;
+
+            data.forEach(row => {
+                const normalize = (key) => key.trim().toUpperCase();
+                const cleanRow = {};
+                Object.keys(row).forEach(k => cleanRow[normalize(k)] = row[k]);
+
+                const semestre = cleanRow['SEMESTRE'] || cleanRow['NIVEL'] || 'S/N';
+                const grupo = cleanRow['GRUPO'] || cleanRow['GR'] || 'S/G';
+                const materia = cleanRow['ASIGNATURA'] || cleanRow['MATERIA'] || 'Sin Nombre';
+                const docente = cleanRow['DOCENTE'] || 'Por asignar';
+                const sigla = cleanRow['SIGLA'] || '';
+
+                if (materia === 'Sin Nombre') return;
+
+                const extractSlot = (diaKey, inicioKey, finKey, aulaKey) => {
+                    const dia = cleanRow[diaKey];
+                    const inicio = cleanRow[inicioKey];
+                    const fin = cleanRow[finKey];
+                    const aula = cleanRow[aulaKey] || "";
+                    
+                    if (dia && inicio && fin) {
+                        const start = formatTime(inicio);
+                        const end = formatTime(fin);
+                        if(start.includes(':') && end.includes(':')) {
+                            sessions.push({
+                                id: idCounter++,
+                                semestre: semestre,
+                                grupo: grupo,
+                                materia: materia,
+                                sigla: sigla,
+                                docente: docente,
+                                dia: String(dia).trim().toUpperCase(),
+                                horario: `${start}-${end}`,
+                                aula: String(aula).trim().toUpperCase(),
+                                choque: false 
+                            });
+                        }
+                    }
+                };
+
+                extractSlot('DIA 1', 'INICIO', 'FIN', 'AULA');
+                extractSlot('DIA 1', 'INICIO 1', 'FIN 1', 'AULA 1');
+                extractSlot('DIA 2', 'INICIO 2', 'FIN 2', 'AULA 2');
+                extractSlot('DIA 3', 'INICIO 3', 'FIN 3', 'AULA 3');
+                extractSlot('DIA 4', 'INICIO 4', 'FIN 4', 'AULA 4');
+            });
+            return sessions;
+        };
+
+        const calculateConflicts = () => {
+            // Reset choques
+            scheduleData.forEach(s => s.choque = false);
+
+            for (let i = 0; i < scheduleData.length; i++) {
+                for (let j = i + 1; j < scheduleData.length; j++) {
+                    const s1 = scheduleData[i];
+                    const s2 = scheduleData[j];
+                    
+                    if (s1.dia === s2.dia && checkTimeOverlap(s1.horario, s2.horario)) {
+                        // Choque de Aula
+                        if (s1.aula && s2.aula && s1.aula !== 'S/A' && s1.aula === s2.aula) {
+                            s1.choque = true;
+                            s2.choque = true;
+                        }
+                    }
+                }
+            }
+        };
+
+        const updateDashboardAndGroups = () => {
+            // Actualizar KPIs Globales
+            kpiTotal.textContent = scheduleData.length;
+            const unassigned = scheduleData.filter(s => !s.aula || s.aula === '' || s.aula === 'S/A').length;
+            kpiUnassigned.textContent = unassigned;
+            
+            calculateConflicts();
+            const conflicts = scheduleData.filter(s => s.choque).length;
+            kpiConflicts.textContent = conflicts;
+
+            // Reagrupar datos para las pestañas
+            groupedData = {};
+            scheduleData.forEach(s => {
+                let key = `${s.semestre} - Grp ${s.grupo}`;
+                if(!groupedData[key]) groupedData[key] = [];
+                groupedData[key].push(s);
+            });
+
+            renderTabs();
+            if(activeGroupTab && groupedData[activeGroupTab]) {
+                redrawGrid(activeGroupTab);
+            } else if(Object.keys(groupedData).length > 0) {
+                // Seleccionar el primer tab por defecto si no hay ninguno activo
+                const firstTab = Object.keys(groupedData).sort()[0];
+                activeGroupTab = firstTab;
+                redrawGrid(firstTab);
+            }
+        };
+
+        // --- RENDERIZADO DE TABS Y GRILLA ---
+        const renderTabs = () => {
+            const keys = Object.keys(groupedData).sort((a, b) => {
+                // Ordenar por número de semestre primero
+                const numA = parseInt(a);
+                const numB = parseInt(b);
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    if (numA !== numB) return numA - numB;
+                }
+                return a.localeCompare(b);
+            });
+
+            tabsContainer.innerHTML = '';
+            
+            keys.forEach(key => {
+                const groupSessions = groupedData[key];
+                // Chequear si este grupo tiene errores para pintar el tab
+                const hasConflicts = groupSessions.some(s => s.choque);
+                const hasUnassigned = groupSessions.some(s => !s.aula || s.aula === 'S/A');
+                
+                let errorClass = '';
+                let icon = '';
+                if (hasConflicts) {
+                    errorClass = 'has-error';
+                    icon = '🚨 ';
+                } else if (hasUnassigned) {
+                    errorClass = 'border-orange-300 text-orange-700 bg-orange-50';
+                    icon = '⚠️ ';
+                }
+
+                const btn = document.createElement('button');
+                btn.className = `tab flex-shrink-0 ${key === activeGroupTab ? 'active' : ''} ${errorClass}`;
+                btn.innerHTML = `${icon}${key}`;
+                btn.onclick = () => {
+                    activeGroupTab = key;
+                    renderTabs(); // Para actualizar clases active
+                    redrawGrid(key);
+                };
+                tabsContainer.appendChild(btn);
+            });
+        };
+
+        const generateEmptyTimeGrid = () => {
+            // Buscar todos los horarios únicos en toda la oferta para generar filas
+            const uniqueTimeSlots = new Set();
+            scheduleData.forEach(s => {
+                if (!s.horario.includes('-')) return;
+                const [start, end] = s.horario.split('-');
+                let current = new Date(`1970-01-01T${start}:00`);
+                const endTime = new Date(`1970-01-01T${end}:00`);
+                while(current < endTime){
+                    const slotStart = current.toTimeString().substring(0,5);
+                    current.setMinutes(current.getMinutes() + 45);
+                    const slotEnd = current.toTimeString().substring(0,5);
+                    uniqueTimeSlots.add(`${slotStart}-${slotEnd}`);
+                }
+            });
+
+            // Si no hay datos, slots por defecto
+            if (uniqueTimeSlots.size === 0) {
+                ["07:00-07:45", "07:45-08:30", "08:30-09:15", "09:15-10:00", "10:00-10:45", "10:45-11:30", "11:30-12:15", "12:15-13:00", "13:00-13:45", "13:45-14:30", "14:30-15:15", "15:15-16:00", "16:00-16:45", "16:45-17:30", "17:30-18:15", "18:15-19:00", "19:00-19:45", "19:45-20:30", "20:30-21:15", "21:15-22:00"].forEach(t => uniqueTimeSlots.add(t));
+            }
+
+            const sortedTimeSlots = Array.from(uniqueTimeSlots).sort();
+            scheduleTbody.innerHTML = '';
+            
+            sortedTimeSlots.forEach(slotText => {
+                const startTime = slotText.split('-')[0].trim();
+                const row = document.createElement('tr');
+                const cellClass = "py-1 sm:py-2 px-0.5 sm:px-1 text-[10px] sm:text-xs border border-slate-200 relative"; 
+                
+                row.innerHTML = `
+                    <td class="py-1 sm:py-2 px-0.5 sm:px-1 font-bold text-slate-600 text-[10px] sm:text-xs border-r border-slate-300 bg-slate-50 sticky left-0 z-5">${slotText}</td>
+                    <td data-day="LUNES" data-time="${startTime}" class="${cellClass}"></td>
+                    <td data-day="MARTES" data-time="${startTime}" class="${cellClass}"></td>
+                    <td data-day="MIERCOLES" data-time="${startTime}" class="${cellClass}"></td>
+                    <td data-day="JUEVES" data-time="${startTime}" class="${cellClass}"></td>
+                    <td data-day="VIERNES" data-time="${startTime}" class="${cellClass}"></td>
+                    <td data-day="SABADO" data-time="${startTime}" class="${cellClass}"></td>
+                `;
+                scheduleTbody.appendChild(row);
+            });
+        };
+
+        const redrawGrid = (groupKey) => {
+            generateEmptyTimeGrid();
+            const groupSessions = groupedData[groupKey] || [];
+
+            // Identificar materias únicas para darles un color
+            const uniqueSubjectNames = [...new Set(groupSessions.map(s => s.materia))];
+
+            groupSessions.forEach(session => {
+                let colorIndex = uniqueSubjectNames.indexOf(session.materia);
+                const bgColor = randomColors[colorIndex % randomColors.length];
+
+                if(!session.horario.includes('-')) return;
+                const [start, end] = session.horario.split('-');
+                let current = new Date(`1970-01-01T${start}:00`);
+                const endTime = new Date(`1970-01-01T${end}:00`);
+                
+                while(current < endTime){
+                    const slotStart = current.toTimeString().substring(0,5);
+                    const diaHtml = session.dia.replace('É','E').replace('Á','A').replace('Í','I').replace('Ó','O').replace('Ú','U');
+                    const cell = scheduleTbody.querySelector(`td[data-day="${diaHtml}"][data-time="${slotStart}"]`);
+                    
+                    if (cell) {
+                        const isUnassigned = !session.aula || session.aula === 'S/A';
+                        let pillClass = "bg-white border-slate-300 text-slate-700";
+                        let warningIcon = "";
+                        let tooltipText = "Clic para reasignar aula";
+
+                        if (session.choque) {
+                            pillClass = "error hover:bg-red-200";
+                            warningIcon = "🚨 ";
+                            tooltipText = "¡CHOQUE DETECTADO! Clic para arreglar";
+                        } else if (isUnassigned) {
+                            pillClass = "warning hover:bg-orange-200";
+                            warningIcon = "⚠️ ";
+                        }
+
+                        const roomText = isUnassigned ? 'S/A' : session.aula;
+                        
+                        // Si ya hay algo en la celda (dos materias del mismo grupo en el mismo horario), lo agregamos apilado
+                        const currentHtml = cell.innerHTML;
+                        
+                        const newSubjectHtml = `
+                            <div class="subject-cell-content w-full h-full flex flex-col justify-center items-center leading-tight p-0.5 sm:p-1 overflow-hidden mb-1 rounded border border-black/5" style="background-color: ${bgColor};">
+                                <span class="font-black block w-full text-center truncate text-[8px] sm:text-[9px] text-slate-800 uppercase" title="${session.materia}">${session.materia}</span>
+                                <span class="text-[7px] sm:text-[8px] opacity-80 block w-full text-center italic mt-0.5 truncate text-slate-700">${session.docente}</span>
+                                <button class="room-pill ${pillClass} mt-1 w-full justify-center" title="${tooltipText}" data-session-id="${session.id}">
+                                    ${warningIcon}${roomText} <span class="no-export">✏️</span>
+                                </button>
+                            </div>
+                        `;
+
+                        cell.innerHTML = currentHtml + newSubjectHtml;
+                        
+                        // Asignar evento al nuevo botón (pill)
+                        const btn = cell.querySelector(`button[data-session-id="${session.id}"]`);
+                        if(btn) {
+                            btn.onclick = (e) => {
+                                e.stopPropagation(); // Evitar clics dobles
+                                openAssignModal(session);
+                            };
+                        }
+                    }
+                    current.setMinutes(current.getMinutes() + 45);
+                }
+            });
+        };
+
+        // --- LÓGICA DEL MODAL DE ASIGNACIÓN ---
+        const openAssignModal = (session) => {
+            currentEditingSession = session;
+            
+            // Llenar datos fijos
+            document.getElementById('modal-subject-name').textContent = session.materia;
+            document.getElementById('modal-group').textContent = `Grupo: ${session.grupo} (${session.semestre})`;
+            document.getElementById('modal-teacher').textContent = session.docente;
+            document.getElementById('modal-time').textContent = `${session.dia} ${session.horario}`;
+            document.getElementById('modal-time-ref').textContent = `${session.dia} ${session.horario}`;
+            document.getElementById('scope-single-text').textContent = session.dia;
+            
+            const curRoom = session.aula || 'S/A';
+            const curCap = roomCapacities[curRoom] ? ` (Cap: ${roomCapacities[curRoom]})` : '';
+            document.getElementById('modal-current-room').textContent = curRoom + curCap;
+            
+            inputManualRoom.value = curRoom !== 'S/A' ? curRoom : '';
+            document.getElementById('modal-warnings').classList.add('hidden');
+            document.querySelector('input[name="apply-scope"][value="single"]').checked = true;
+
+            renderAvailableRooms();
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        };
+
+        const renderAvailableRooms = () => {
+            listAvailableRooms.innerHTML = '';
+            const minCap = parseInt(inputFilterCapacity.value) || 0;
+            const sessionDay = currentEditingSession.dia;
+            const sessionTime = currentEditingSession.horario;
+
+            // 1. Identificar todas las aulas ocupadas en ese momento
+            let occupiedRooms = new Set();
+            scheduleData.forEach(s => {
+                if (s.id !== currentEditingSession.id && s.aula && s.aula !== 'S/A') {
+                    if (s.dia === sessionDay && checkTimeOverlap(s.horario, sessionTime)) {
+                        occupiedRooms.add(s.aula);
+                    }
+                }
+            });
+
+            // 2. Filtrar el catálogo de aulas (las que tenemos en roomCapacities)
+            let availableList = [];
+            for (let aula in roomCapacities) {
+                let cap = roomCapacities[aula];
+                if (!occupiedRooms.has(aula) && cap >= minCap) {
+                    availableList.push({ aula, cap });
+                }
+            }
+
+            // Ordenar por capacidad
+            availableList.sort((a, b) => a.cap - b.cap);
+
+            if (availableList.length === 0) {
+                listAvailableRooms.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-slate-500 italic text-xs">No hay aulas disponibles registradas con esa capacidad en este horario.</td></tr>`;
+                return;
+            }
+
+            availableList.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-blue-50 transition border-b border-slate-100";
+                tr.innerHTML = `
+                    <td class="p-2 font-mono font-bold text-slate-700 text-[10px] sm:text-xs">${item.aula}</td>
+                    <td class="p-2 text-center font-bold text-slate-600 text-xs sm:text-sm">${item.cap}</td>
+                    <td class="p-2 text-center">
+                        <button class="px-2 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 text-[9px] sm:text-[10px] font-bold rounded border border-green-300 transition w-full">Asignar</button>
+                    </td>
+                `;
+                tr.querySelector('button').onclick = () => saveAssignment(item.aula);
+                listAvailableRooms.appendChild(tr);
+            });
+        };
+
+        const saveAssignment = (newAulaText) => {
+            const newAula = newAulaText.trim().toUpperCase();
+            const scope = document.querySelector('input[name="apply-scope"]:checked').value;
+            const isUnassigning = (newAula === '' || newAula === 'S/A');
+            const warnBox = document.getElementById('modal-warnings');
+            
+            if (scope === 'single') {
+                if (!isUnassigning) {
+                    const choqueObj = scheduleData.find(s => 
+                        s.id !== currentEditingSession.id && 
+                        s.aula === newAula && 
+                        s.dia === currentEditingSession.dia && 
+                        checkTimeOverlap(s.horario, currentEditingSession.horario)
+                    );
+
+                    if (choqueObj) {
+                        warnBox.innerHTML = `<strong>⚠️ CHOQUE DETECTADO:</strong> El aula ${newAula} está ocupada el ${currentEditingSession.dia} por <br><em>${choqueObj.materia} (${choqueObj.grupo})</em>.`;
+                        warnBox.classList.remove('hidden');
+                        return;
+                    }
+                }
+
+                const index = scheduleData.findIndex(s => s.id === currentEditingSession.id);
+                if (index !== -1) {
+                    scheduleData[index].aula = isUnassigning ? 'S/A' : newAula;
+                }
+            } else {
+                // Aplicar a todos los días de esta materia y grupo
+                const relatedSessions = scheduleData.filter(s => 
+                    s.materia === currentEditingSession.materia && 
+                    s.grupo === currentEditingSession.grupo && 
+                    s.semestre === currentEditingSession.semestre
+                );
+
+                if (!isUnassigning) {
+                    for(let s of relatedSessions) {
+                        const choqueObj = scheduleData.find(other => 
+                            other.id !== s.id && 
+                            !relatedSessions.some(rs => rs.id === other.id) &&
+                            other.aula === newAula && 
+                            other.dia === s.dia && 
+                            checkTimeOverlap(other.horario, s.horario)
+                        );
+                        if (choqueObj) {
+                            warnBox.innerHTML = `<strong>⚠️ CHOQUE DETECTADO:</strong> No se puede aplicar a todos los días. El aula ${newAula} está ocupada el <strong>${s.dia}</strong> por <em>${choqueObj.materia} (${choqueObj.grupo})</em>.`;
+                            warnBox.classList.remove('hidden');
+                            return;
+                        }
+                    }
+                }
+
+                relatedSessions.forEach(s => s.aula = isUnassigning ? 'S/A' : newAula);
+            }
+            
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            
+            // Refrescar vistas
+            updateDashboardAndGroups();
+        };
+
+        // --- DOCENTES Y EXPORTACIÓN ---
+        const renderTeachersTable = () => {
+            teachersTableBody.innerHTML = '';
+            const filterText = teacherSearch.value.toLowerCase();
+            
+            // Filtrar y ordenar
+            let filteredSessions = scheduleData.filter(s => {
+                return s.docente.toLowerCase().includes(filterText) ||
+                       s.materia.toLowerCase().includes(filterText) ||
+                       (s.aula && s.aula.toLowerCase().includes(filterText));
+            });
+
+            filteredSessions.sort((a, b) => a.docente.localeCompare(b.docente) || a.materia.localeCompare(b.materia));
+
+            if (filteredSessions.length === 0) {
+                teachersTableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-500 italic">No hay datos para mostrar.</td></tr>`;
+                return;
+            }
+
+            filteredSessions.forEach(s => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition border-b border-slate-100";
+                
+                const roomClass = (!s.aula || s.aula === 'S/A') ? "text-orange-600 bg-orange-50 border-orange-200" : (s.choque ? "text-red-600 bg-red-50 border-red-200" : "text-slate-700 bg-slate-100 border-slate-200");
+                
+                tr.innerHTML = `
+                    <td class="p-2 sm:p-3 font-bold text-slate-800">${s.docente}</td>
+                    <td class="p-2 sm:p-3">
+                        <div class="font-bold text-slate-700 leading-tight">${s.materia}</div>
+                        <div class="text-[9px] sm:text-[10px] text-slate-500 bg-slate-200 inline-block px-1 rounded mt-0.5">Grp ${s.grupo} (${s.semestre})</div>
+                    </td>
+                    <td class="p-2 sm:p-3">
+                        <div class="font-bold text-blue-700">${s.dia}</div>
+                        <div class="font-mono text-slate-500">${s.horario}</div>
+                    </td>
+                    <td class="p-2 sm:p-3 text-center">
+                        <span class="px-2 py-1 rounded font-bold border font-mono ${roomClass}">
+                            ${s.choque ? '⚠️ ' : ''}${s.aula || 'S/A'}
+                        </span>
+                    </td>
+                `;
+                teachersTableBody.appendChild(tr);
+            });
+        };
+
+        const prepareExportView = () => {
+            const originalWidth = horarioPdfWrapper.style.width;
+            const originalOverflow = horarioPdfWrapper.style.overflow;
+            
+            horarioPdfWrapper.style.width = "fit-content"; 
+            horarioPdfWrapper.style.overflow = "visible"; 
+            horarioPdfWrapper.classList.add('export-mode');
+            
+            // Ocultar íconos de lápiz para que no salgan en el PDF
+            document.querySelectorAll('.no-export').forEach(el => el.style.display = 'none');
+
+            return { originalWidth, originalOverflow };
+        };
+
+        const restoreExportView = (backup) => {
+            horarioPdfWrapper.classList.remove('export-mode');
+            horarioPdfWrapper.style.width = backup.originalWidth;
+            horarioPdfWrapper.style.overflow = backup.originalOverflow;
+            
+            // Restaurar íconos de lápiz
+            document.querySelectorAll('.no-export').forEach(el => el.style.display = '');
+        };
+
+        const exportToPdf = async () => {
+            if (!activeGroupTab) { alert("Sincroniza los datos primero."); return; }
+            const { jsPDF } = window.jspdf;
+            const backup = prepareExportView(); 
+
+            try {
+                const canvas = await html2canvas(horarioPdfWrapper, { scale: 2, useCORS: true });
+                const imgData = canvas.toDataURL("image/png");
+                const pdf = new jsPDF("l", "mm", "a4"); 
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                
+                pdf.setFont("helvetica", "bold");
+                pdf.setFontSize(14);
+                pdf.text(`Horario: ${activeGroupTab}`, pageWidth / 2, 15, { align: "center" });
+                
+                const imgWidth = pageWidth - 20; 
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                pdf.addImage(imgData, "PNG", 10, 25, imgWidth, imgHeight);
+                pdf.save(`Horario_${activeGroupTab.replace(/\s+/g, '_')}.pdf`);
+            } catch (err) {
+                console.error(err); alert("Error al generar PDF.");
+            } finally {
+                restoreExportView(backup);
+            }
+        };
+
+        const exportToImage = async () => {
+            if (!activeGroupTab) { alert("Sincroniza los datos primero."); return; }
+            const backup = prepareExportView(); 
+            try {
+                const canvas = await html2canvas(horarioPdfWrapper, { scale: 2, useCORS: true });
+                const link = document.createElement('a');
+                link.download = `Horario_${activeGroupTab.replace(/\s+/g, '_')}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            } finally {
+                restoreExportView(backup);
+            }
+        };
+
+        // --- FETCHING DATOS ---
+        const loadData = async () => {
+            btnSync.innerHTML = "⏳ Cargando...";
+            btnSync.disabled = true;
+
+            try {
+                // 1. Cargar Capacidades
+                statusCapacidades.textContent = "Buscando...";
+                statusCapacidades.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600";
+                
+                let resCap = await fetch('capacidad_aula.xlsx').catch(() => null);
+                if (resCap && resCap.ok) {
+                    const bufCap = await resCap.arrayBuffer();
+                    const wbCap = XLSX.read(new Uint8Array(bufCap), { type: 'array' });
+                    const jsonCap = XLSX.utils.sheet_to_json(wbCap.Sheets[wbCap.SheetNames[0]]);
+                    processCapacidades(jsonCap);
+                    statusCapacidades.textContent = `✅ Listo (${Object.keys(roomCapacities).length})`;
+                    statusCapacidades.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700";
+                } else {
+                    statusCapacidades.textContent = "❌ No encontrado";
+                    statusCapacidades.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700";
+                    console.warn("No se encontró capacidad_aula.xlsx.");
+                }
+
+                // 2. Cargar Horarios
+                statusHorarios.textContent = "Buscando...";
+                statusHorarios.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600";
+                
+                let resHor = await fetch('horarios.xlsx').catch(() => null);
+                if (resHor && resHor.ok) {
+                    const bufHor = await resHor.arrayBuffer();
+                    const wbHor = XLSX.read(new Uint8Array(bufHor), { type: 'array' });
+                    let allJson = [];
+                    wbHor.SheetNames.forEach(name => {
+                        allJson = allJson.concat(XLSX.utils.sheet_to_json(wbHor.Sheets[name], { defval: "" }));
+                    });
+                    
+                    scheduleData = processHorarios(allJson);
+                    statusHorarios.textContent = `✅ Listo`;
+                    statusHorarios.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700";
+                } else {
+                    statusHorarios.textContent = "❌ No encontrado";
+                    statusHorarios.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700";
+                    alert("Error: No se encontró el archivo 'horarios.xlsx'.");
+                }
+
+                updateDashboardAndGroups();
+
+            } catch(e) {
+                console.error(e);
+                alert("Error crítico al cargar los archivos.");
+            } finally {
+                btnSync.innerHTML = "<span>🔄</span> Sincronizar";
+                btnSync.disabled = false;
+            }
+        };
+
+        // --- EVENT LISTENERS ---
+        btnSync.addEventListener('click', loadData);
+
+        btnCloseModal.addEventListener('click', () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        });
+
+        btnSaveManual.addEventListener('click', () => saveAssignment(inputManualRoom.value));
+        
+        inputFilterCapacity.addEventListener('input', renderAvailableRooms);
+
+        btnTeachers.addEventListener('click', () => {
+            if (scheduleData.length === 0) { alert("Por favor sincroniza los datos primero."); return; }
+            teacherSearch.value = '';
+            renderTeachersTable();
+            modalTeachers.classList.remove('hidden');
+            modalTeachers.classList.add('flex');
+        });
+
+        btnCloseTeachers.addEventListener('click', () => {
+            modalTeachers.classList.add('hidden');
+            modalTeachers.classList.remove('flex');
+        });
+
+        teacherSearch.addEventListener('input', renderTeachersTable);
+        
+        document.getElementById('export-img-btn').addEventListener('click', exportToImage);
+        document.getElementById('export-pdf-btn').addEventListener('click', exportToPdf);
+
+        btnDownloadTpl.addEventListener('click', () => {
+            const wsData = [
+                ["AULA", "CAPACIDAD"],
+                ["01", 50],
+                ["02", 45],
+                ["SALA DE COMPUTO 19", 30],
+                ["CAMPUS SKINNER", 100]
+            ];
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Capacidades");
+            XLSX.writeFile(wb, "capacidad_aula.xlsx");
+        });
+
+        // Iniciar carga automática
+        loadData();
+    });
+    </script>
+</body>
+</html>
