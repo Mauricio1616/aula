@@ -310,8 +310,8 @@
                 <div class="w-full md:w-2/3 bg-slate-50 p-4 sm:p-5 flex flex-col overflow-hidden">
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-2 sm:mb-3 gap-2">
                         <div>
-                            <h4 class="font-bold text-sm sm:text-base text-slate-800">Aulas Disponibles</h4>
-                            <p class="text-[10px] sm:text-xs text-slate-500">Aulas detectadas en el Excel libres en el horario de <span id="modal-time-ref" class="font-bold"></span></p>
+                            <h4 class="font-bold text-sm sm:text-base text-slate-800">Catálogo de Aulas</h4>
+                            <p class="text-[10px] sm:text-xs text-slate-500">Aulas para el horario de <span id="modal-time-ref" class="font-bold"></span></p>
                         </div>
                     </div>
 
@@ -754,45 +754,77 @@
             const sessionDay = currentEditingSession.dia;
             const sessionTime = currentEditingSession.horario;
 
-            let occupiedRooms = new Set();
+            // Mapear el estado de cada aula (qué sesiones la ocupan en este horario)
+            let roomStatus = {};
+            allRoomsList.forEach(r => roomStatus[r] = []);
+
             scheduleData.forEach(s => {
                 if (s.id !== currentEditingSession.id && s.aula && s.aula !== 'S/A') {
                     if (s.dia === sessionDay && checkTimeOverlap(s.horario, sessionTime)) {
-                        occupiedRooms.add(s.aula);
+                        if (!roomStatus[s.aula]) roomStatus[s.aula] = [];
+                        roomStatus[s.aula].push(s);
                     }
                 }
             });
 
-            let availableList = [];
-            allRoomsList.forEach(aula => {
-                if (!occupiedRooms.has(aula)) {
-                    availableList.push(aula);
-                }
+            // Convertir a un formato para listar
+            let roomsList = allRoomsList.map(aula => {
+                return { aula: aula, occupants: roomStatus[aula] || [] };
             });
 
-            // Ordenar alfabéticamente
-            availableList.sort((a, b) => a.localeCompare(b));
+            // Filtrar el aula actual de la materia (no tiene sentido intercambiar con uno mismo)
+            roomsList = roomsList.filter(item => item.aula !== (currentEditingSession.aula || 'S/A'));
 
-            if (availableList.length === 0) {
-                listAvailableRooms.innerHTML = `<tr><td colspan="2" class="p-4 text-center text-slate-500 italic text-xs">Todas las aulas de la oferta están ocupadas en este horario.</td></tr>`;
+            // Ordenar: Primero las libres, luego las ocupadas, finalmente alfabético
+            roomsList.sort((a, b) => {
+                if (a.occupants.length === 0 && b.occupants.length > 0) return -1;
+                if (a.occupants.length > 0 && b.occupants.length === 0) return 1;
+                return a.aula.localeCompare(b.aula);
+            });
+
+            if (roomsList.length === 0) {
+                listAvailableRooms.innerHTML = `<tr><td colspan="2" class="p-4 text-center text-slate-500 italic text-xs">No hay otras aulas registradas en el sistema.</td></tr>`;
                 return;
             }
 
-            availableList.forEach(aula => {
+            roomsList.forEach(item => {
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-blue-50 transition border-b border-slate-100";
-                tr.innerHTML = `
-                    <td class="p-2 font-mono font-bold text-slate-700 text-[10px] sm:text-xs">${aula}</td>
-                    <td class="p-2 text-center">
-                        <button class="px-2 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 text-[9px] sm:text-[10px] font-bold rounded border border-green-300 transition w-full shadow-sm">Asignar</button>
-                    </td>
-                `;
-                tr.querySelector('button').onclick = () => saveAssignment(aula);
+                
+                if (item.occupants.length === 0) {
+                    // AULA LIBRE
+                    tr.innerHTML = `
+                        <td class="p-2 font-mono font-bold text-slate-700 text-[10px] sm:text-xs">
+                            ${item.aula} <span class="ml-1 text-[8px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Libre</span>
+                        </td>
+                        <td class="p-2 text-center">
+                            <button class="px-2 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 text-[9px] sm:text-[10px] font-bold rounded border border-green-300 transition w-full shadow-sm">Asignar</button>
+                        </td>
+                    `;
+                    tr.querySelector('button').onclick = () => saveAssignment(item.aula, false);
+                } else {
+                    // AULA OCUPADA
+                    let occNames = item.occupants.map(o => `${o.materia} (Grp ${o.grupo})`).join(', ');
+                    tr.innerHTML = `
+                        <td class="p-2 text-[10px] sm:text-xs overflow-hidden">
+                            <div class="font-mono font-bold text-slate-700">${item.aula}</div>
+                            <div class="text-[8px] sm:text-[9px] text-red-600 mt-0.5 leading-tight truncate w-full max-w-[150px] sm:max-w-[300px]" title="Ocupado por: ${occNames}">Ocupado: ${occNames}</div>
+                        </td>
+                        <td class="p-2 text-center">
+                            <button class="px-2 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 text-[9px] sm:text-[10px] font-bold rounded border border-orange-300 transition w-full shadow-sm" title="Intercambiar aulas">Cambiar</button>
+                        </td>
+                    `;
+                    tr.querySelector('button').onclick = () => {
+                        let oldAula = currentEditingSession.aula || 'S/A';
+                        let confirmMsg = `¿Estás seguro de intercambiar?\n\n- ${currentEditingSession.materia} pasará al ${item.aula}\n- ${occNames} pasará al ${oldAula}`;
+                        if(confirm(confirmMsg)) saveAssignment(item.aula, true);
+                    };
+                }
                 listAvailableRooms.appendChild(tr);
             });
         };
 
-        const saveAssignment = (newAulaText) => {
+        const saveAssignment = (newAulaText, forceSwap = false) => {
             const newAula = newAulaText.trim().toUpperCase();
             const scope = document.querySelector('input[name="apply-scope"]:checked').value;
             const isUnassigning = (newAula === '' || newAula === 'S/A');
@@ -804,24 +836,28 @@
             }
 
             if (scope === 'single') {
-                if (!isUnassigning) {
-                    const choqueObj = scheduleData.find(s => 
-                        s.id !== currentEditingSession.id && 
-                        s.aula === newAula && 
-                        s.dia === currentEditingSession.dia && 
-                        checkTimeOverlap(s.horario, currentEditingSession.horario)
-                    );
+                const choqueObj = !isUnassigning ? scheduleData.filter(s => 
+                    s.id !== currentEditingSession.id && 
+                    s.aula === newAula && 
+                    s.dia === currentEditingSession.dia && 
+                    checkTimeOverlap(s.horario, currentEditingSession.horario)
+                ) : [];
 
-                    if (choqueObj) {
-                        warnBox.innerHTML = `<strong>⚠️ CHOQUE:</strong> El aula ${newAula} está ocupada el ${currentEditingSession.dia} por <br><em>${choqueObj.materia} (${choqueObj.grupo})</em>.`;
-                        warnBox.classList.remove('hidden');
-                        return;
-                    }
+                if (choqueObj.length > 0 && !forceSwap) {
+                    let occNames = choqueObj.map(o => `${o.materia} (${o.grupo})`).join(', ');
+                    warnBox.innerHTML = `<strong>⚠️ CHOQUE:</strong> El aula ${newAula} está ocupada el ${currentEditingSession.dia} por <em>${occNames}</em>.<br>Haz clic en "Cambiar" en la lista para forzar el intercambio.`;
+                    warnBox.classList.remove('hidden');
+                    return;
                 }
 
                 const index = scheduleData.findIndex(s => s.id === currentEditingSession.id);
                 if (index !== -1) {
+                    let oldAula = scheduleData[index].aula || 'S/A';
                     scheduleData[index].aula = isUnassigning ? 'S/A' : newAula;
+                    
+                    if (forceSwap && choqueObj.length > 0) {
+                        choqueObj.forEach(c => c.aula = oldAula);
+                    }
                 }
             } else {
                 const relatedSessions = scheduleData.filter(s => 
@@ -829,29 +865,48 @@
                     s.grupo === currentEditingSession.grupo
                 );
 
+                // Recopilar choques de todos los días de la materia primero
+                let allConflicts = [];
                 if (!isUnassigning) {
                     for(let s of relatedSessions) {
-                        const choqueObj = scheduleData.find(other => 
+                        const choques = scheduleData.filter(other => 
                             other.id !== s.id && 
                             !relatedSessions.some(rs => rs.id === other.id) &&
                             other.aula === newAula && 
                             other.dia === s.dia && 
                             checkTimeOverlap(other.horario, s.horario)
                         );
-                        if (choqueObj) {
-                            warnBox.innerHTML = `<strong>⚠️ CHOQUE:</strong> No se puede aplicar a todos los días. El aula ${newAula} está ocupada el <strong>${s.dia}</strong> por <em>${choqueObj.materia} (${choqueObj.grupo})</em>.`;
-                            warnBox.classList.remove('hidden');
-                            return;
+                        if (choques.length > 0) {
+                            allConflicts.push({ session: s, choques: choques });
                         }
                     }
                 }
-                relatedSessions.forEach(s => s.aula = isUnassigning ? 'S/A' : newAula);
+
+                if (allConflicts.length > 0 && !forceSwap) {
+                    warnBox.innerHTML = `<strong>⚠️ CHOQUE:</strong> No se puede aplicar a todos los días porque el aula ${newAula} tiene clases en esos horarios.<br>Utiliza el botón "Cambiar" de la lista para forzar el trueque.`;
+                    warnBox.classList.remove('hidden');
+                    return;
+                }
+
+                // Aplicar el cambio y el intercambio a los afectados
+                relatedSessions.forEach(s => {
+                    let oldAula = s.aula || 'S/A';
+                    
+                    if (forceSwap && !isUnassigning) {
+                        const specificConflicts = allConflicts.find(c => c.session.id === s.id);
+                        if (specificConflicts) {
+                            specificConflicts.choques.forEach(conf => conf.aula = oldAula);
+                        }
+                    }
+                    
+                    s.aula = isUnassigning ? 'S/A' : newAula;
+                });
             }
             
             modal.classList.add('hidden');
             modal.classList.remove('flex');
             
-            // Si estamos en la vista Aula, y acabamos de mover la clase a un Aula, abrimos esa pestaña para confirmar visualmente
+            // Si estamos en la vista Aula, abrimos la pestaña de la nueva aula
             if(groupingModeSelect.value === 'AULA' && !isUnassigning) {
                 activeGroupTab = newAula;
             }
