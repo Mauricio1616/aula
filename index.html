@@ -682,6 +682,7 @@
                     const cell = scheduleTbody.querySelector(`td[data-day="${diaHtml}"][data-time="${slotStart}"]`);
                     
                     if (cell) {
+                        const isUnassigned = !session.aula || session.aula === 'S/A';
                         let pillClass = "bg-white border-slate-300 text-slate-700";
                         let warningIcon = "";
 
@@ -693,7 +694,7 @@
                         // Textos según la vista
                         let topText = mode === 'AULA' ? `Grp ${session.grupo}` : session.materia;
                         let midText = mode === 'AULA' ? session.materia : session.sigla;
-                        let roomText = mode === 'AULA' ? 'Cambiar Aula' : session.aula;
+                        let roomText = isUnassigned ? 'S/A' : session.aula;
                         
                         const currentHtml = cell.innerHTML;
                         const newSubjectHtml = `
