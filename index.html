@@ -66,12 +66,12 @@
         .room-pill.error { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
         .room-pill.warning { background: #ffedd5; border-color: #fdba74; color: #c2410c; }
 
-        /* --- ESTILOS DE EXPORTACIÓN (NUEVOS - MODO CLON) --- */
+        /* --- ESTILOS DE EXPORTACIÓN (MODO CLON) --- */
         .export-mode { 
             position: absolute !important;
             top: -9999px !important;
             left: -9999px !important;
-            width: 1400px !important; /* Forzamos un ancho grande para que ningún texto se corte */
+            width: 1400px !important; 
             height: auto !important; 
             overflow: visible !important; 
             background-color: white !important; 
@@ -90,7 +90,7 @@
             border: 1px solid #1e293b !important; 
             font-size: 13px !important; 
             padding: 10px !important; 
-            position: static !important; /* Quitamos el sticky para evitar cortes en la foto */
+            position: static !important; 
         }
         .export-mode td { 
             height: auto !important; 
@@ -105,7 +105,6 @@
             width: 80px !important; 
             position: static !important;
         }
-        /* Magia: Forzamos a que los textos NO se corten con (...) */
         .export-mode .truncate { 
             white-space: normal !important;
             overflow: visible !important;
@@ -137,6 +136,9 @@
         </div>
         
         <div class="flex flex-wrap justify-center gap-2 sm:gap-3 text-xs sm:text-sm w-full md:w-auto">
+            <button id="btn-optimize" class="flex-1 md:flex-none px-3 sm:px-4 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold rounded-lg transition flex justify-center items-center gap-2 border border-emerald-300">
+                <span>✨</span> Optimizar
+            </button>
             <button id="btn-teachers" class="flex-1 md:flex-none px-3 sm:px-4 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-medium rounded-lg transition flex justify-center items-center gap-2 border border-indigo-300">
                 <span>📋</span> Listado General
             </button>
@@ -156,7 +158,10 @@
                     <span class="flex items-center gap-1 font-medium text-slate-600 truncate mr-2">📄 horarios.xlsx</span>
                     <span id="status-horarios" class="text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Esperando...</span>
                 </div>
-                <p class="text-[9px] text-slate-400 italic mt-1 leading-tight">El sistema lee automáticamente las aulas desde las pestañas del archivo.</p>
+                <div class="flex justify-between items-center text-xs sm:text-sm">
+                    <span class="flex items-center gap-1 font-medium text-slate-600 truncate mr-2">📊 capacidad_aula.xlsx</span>
+                    <span id="status-capacidades" class="text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Esperando...</span>
+                </div>
             </div>
         </div>
 
@@ -252,7 +257,7 @@
     </main>
 
     <!-- MODAL DE ASIGNACIÓN DE AULA -->
-    <div id="modal-assign" class="fixed inset-0 bg-slate-900 bg-opacity-75 z-50 hidden justify-center items-center p-2 sm:p-4 backdrop-blur-sm">
+    <div id="modal-assign" class="fixed inset-0 bg-slate-900 bg-opacity-75 z-[60] hidden justify-center items-center p-2 sm:p-4 backdrop-blur-sm">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] flex flex-col modal-animate border-t-4 sm:border-t-8 border-slate-800">
             
             <!-- Modal Header -->
@@ -334,7 +339,7 @@
     </div>
 
     <!-- MODAL LISTADO GENERAL -->
-    <div id="modal-teachers" class="fixed inset-0 bg-slate-900 bg-opacity-75 z-50 hidden justify-center items-center p-2 sm:p-4 backdrop-blur-sm">
+    <div id="modal-teachers" class="fixed inset-0 bg-slate-900 bg-opacity-75 z-[60] hidden justify-center items-center p-2 sm:p-4 backdrop-blur-sm">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] sm:max-h-[90vh] flex flex-col modal-animate border-t-4 sm:border-t-8 border-indigo-600">
             <div class="p-4 sm:p-5 border-b border-slate-200 flex justify-between items-start bg-slate-50 rounded-t-lg">
                 <div>
@@ -364,15 +369,33 @@
         </div>
     </div>
 
+    <!-- MODAL RESULTADOS DE OPTIMIZACIÓN -->
+    <div id="modal-optimization" class="fixed inset-0 bg-slate-900 bg-opacity-75 z-[70] hidden justify-center items-center p-2 sm:p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col modal-animate border-t-4 sm:border-t-8 border-emerald-500">
+            <div class="p-4 border-b border-slate-200 flex justify-between items-start bg-slate-50 rounded-t-lg">
+                <div>
+                    <h3 class="text-xl font-bold text-slate-800" id="optimization-title">Resultados de Optimización</h3>
+                    <p class="text-xs text-slate-500">Ajuste de aulas por alta y poca demanda</p>
+                </div>
+                <button id="modal-optimization-close" class="text-slate-400 hover:text-red-500 font-bold text-xl leading-none">&times;</button>
+            </div>
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-4" id="optimization-logs">
+            </div>
+            <div class="p-4 border-t border-slate-200 bg-slate-50 text-right rounded-b-lg">
+                <button id="modal-optimization-ok" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow transition">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
     <script>
     // --- VARIABLES DE ESTADO ---
-    let scheduleData = [];     // Array plano general (para calcular choques y buscar)
-    let groupedData = {};      // Oferta agrupada dinámicamente
-    let allRoomsList = [];     // Lista de aulas extraídas de las pestañas
+    let scheduleData = [];     
+    let groupedData = {};      
+    let allRoomsList = [];     
+    let roomCapacities = {};   
     let currentEditingSession = null; 
     let activeGroupTab = null;
 
-    // Paleta de colores para materias en la grilla
     const randomColors = [
         "#e0f2fe", "#dcfce7", "#f3e8ff", "#ffedd5", "#f1f5f9", "#fee2e2", "#ccfbf1", "#fae8ff", "#fef9c3", "#e0e7ff"
     ];
@@ -381,7 +404,9 @@
         
         // DOM Elements
         const btnSync = document.getElementById('btn-sync');
+        const btnOptimize = document.getElementById('btn-optimize');
         const statusHorarios = document.getElementById('status-horarios');
+        const statusCapacidades = document.getElementById('status-capacidades');
         
         const kpiTotal = document.getElementById('kpi-total');
         const kpiRooms = document.getElementById('kpi-rooms');
@@ -398,13 +423,17 @@
         const btnSaveManual = document.getElementById('btn-save-manual');
         const listAvailableRooms = document.getElementById('available-rooms-list');
 
-        // Teacher/List Modal & Export Elements
         const modalTeachers = document.getElementById('modal-teachers');
         const btnTeachers = document.getElementById('btn-teachers');
         const btnCloseTeachers = document.getElementById('modal-teachers-close');
         const teacherSearch = document.getElementById('teacher-search');
         const teachersTableBody = document.getElementById('teachers-table-body');
         const horarioPdfWrapper = document.getElementById('horario-pdf');
+
+        // Modals Optimización
+        const modalOpt = document.getElementById('modal-optimization');
+        const btnCloseOpt = document.getElementById('modal-optimization-close');
+        const btnOkOpt = document.getElementById('modal-optimization-ok');
 
         // --- UTILIDADES ---
         const timeToMin = (timeStr) => {
@@ -422,7 +451,23 @@
             return (startA < endB && startB < endA);
         };
 
-        // --- PROCESAMIENTO DE EXCEL (NUEVO FORMATO "MAESTRO POR AULA") ---
+        const normalizeString = (str) => {
+            if (!str) return "";
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+        };
+
+        // --- PROCESAMIENTO DE EXCEL ---
+        const processCapacidades = (data) => {
+            roomCapacities = {};
+            data.forEach(row => {
+                let aula = row['AULA'] || row['Aula'] || row['NOMBRE'];
+                let cap = row['CAPACIDAD'] || row['Capacidad'] || row['ALUMNOS'];
+                if (aula && cap !== undefined) {
+                    roomCapacities[String(aula).trim().toUpperCase()] = parseInt(cap);
+                }
+            });
+        };
+
         const processHorariosVisual = (wb) => {
             let sessions = [];
             let idCounter = 1;
@@ -434,7 +479,6 @@
                 
                 const data = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: "" });
                 
-                // Encontrar la fila de cabecera (Días)
                 let headerRowIdx = -1;
                 for (let i = 0; i < data.length; i++) {
                     const rowStr = data[i].map(c => String(c).toUpperCase()).join(' ');
@@ -463,11 +507,9 @@
                     if (!timeMatch) continue;
                     const timeStr = `${timeMatch[1].padStart(5, '0')}-${timeMatch[2].padStart(5, '0')}`;
                     
-                    // La fila 2 puede ser el nombre de la materia (si la fila 1 era el código)
                     let row2 = null;
                     if (i + 1 < data.length) {
                         const nextRowHora = String(data[i+1][horaIdx] || "").trim();
-                        // Si la siguiente fila NO tiene un horario válido, asumimos que es la continuación de la materia
                         if (!nextRowHora.match(/(\d{1,2}:\d{2})\s*[-–]/)) {
                             row2 = data[i+1];
                         }
@@ -486,7 +528,6 @@
                                 let lines = cell1.split('\n');
                                 let codePart = lines[0].trim();
                                 
-                                // Extraer Sigla y Grupo
                                 let parts = codePart.split(/\s+/);
                                 if (parts.length === 1) {
                                     sigla = parts[0];
@@ -500,7 +541,6 @@
                                     }
                                 }
                                 
-                                // Si todo está mezclado en una celda (Ej: "BIO 242 PSICOFISIOLOGÍA")
                                 if (!cell2 && lines.length > 1) {
                                     materia = lines.slice(1).join(" ").trim();
                                 } else if (!cell2) {
@@ -528,7 +568,7 @@
                             });
                         }
                     }
-                    if (row2) i++; // Saltar la fila de nombres procesada
+                    if (row2) i++;
                 }
             });
             return { sessions, rooms: Array.from(foundRooms) };
@@ -541,7 +581,6 @@
                     const s1 = scheduleData[i];
                     const s2 = scheduleData[j];
                     if (s1.dia === s2.dia && checkTimeOverlap(s1.horario, s2.horario)) {
-                        // Choque si están en la misma aula al mismo tiempo
                         if (s1.aula && s2.aula && s1.aula !== 'S/A' && s1.aula === s2.aula) {
                             s1.choque = true;
                             s2.choque = true;
@@ -562,7 +601,6 @@
             const mode = groupingModeSelect.value;
             groupedData = {};
             
-            // Si vemos por AULA, asegurarnos de que TODAS las aulas existan como pestañas, incluso vacías
             if (mode === 'AULA') {
                 allRoomsList.forEach(r => groupedData[r] = []);
             }
@@ -691,7 +729,6 @@
                             warningIcon = "🚨 ";
                         }
 
-                        // Textos según la vista
                         let topText = mode === 'AULA' ? `Grp ${session.grupo}` : session.materia;
                         let midText = mode === 'AULA' ? session.materia : session.sigla;
                         let roomText = isUnassigned ? 'S/A' : session.aula;
@@ -701,7 +738,7 @@
                             <div class="subject-cell-content w-full h-full flex flex-col justify-center items-center leading-tight p-0.5 sm:p-1 overflow-hidden mb-1 rounded border border-black/5 shadow-sm" style="background-color: ${bgColor};">
                                 <span class="font-black block w-full text-center truncate text-[8px] sm:text-[9px] text-slate-800 uppercase" title="${session.materia}">${topText}</span>
                                 <span class="text-[7px] sm:text-[8px] opacity-80 block w-full text-center mt-0.5 truncate text-slate-700 font-medium">${midText}</span>
-                                <button class="room-pill ${pillClass} mt-1 w-full justify-center" title="Reasignar Aula" data-session-id="${session.id}">
+                                <button class="room-pill ${pillClass} mt-1 w-full justify-center ${mode === 'AULA' ? 'no-export' : ''}" title="Reasignar Aula" data-session-id="${session.id}">
                                     ${warningIcon}${roomText} <span class="no-export">✏️</span>
                                 </button>
                             </div>
@@ -755,7 +792,6 @@
             const sessionDay = currentEditingSession.dia;
             const sessionTime = currentEditingSession.horario;
 
-            // Mapear el estado de cada aula (qué sesiones la ocupan en este horario)
             let roomStatus = {};
             allRoomsList.forEach(r => roomStatus[r] = []);
 
@@ -768,15 +804,12 @@
                 }
             });
 
-            // Convertir a un formato para listar
             let roomsList = allRoomsList.map(aula => {
                 return { aula: aula, occupants: roomStatus[aula] || [] };
             });
 
-            // Filtrar el aula actual de la materia (no tiene sentido intercambiar con uno mismo)
             roomsList = roomsList.filter(item => item.aula !== (currentEditingSession.aula || 'S/A'));
 
-            // Ordenar: Primero las libres, luego las ocupadas, finalmente alfabético
             roomsList.sort((a, b) => {
                 if (a.occupants.length === 0 && b.occupants.length > 0) return -1;
                 if (a.occupants.length > 0 && b.occupants.length === 0) return 1;
@@ -793,7 +826,6 @@
                 tr.className = "hover:bg-blue-50 transition border-b border-slate-100";
                 
                 if (item.occupants.length === 0) {
-                    // AULA LIBRE
                     tr.innerHTML = `
                         <td class="p-2 font-mono font-bold text-slate-700 text-[10px] sm:text-xs">
                             ${item.aula} <span class="ml-1 text-[8px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Libre</span>
@@ -804,7 +836,6 @@
                     `;
                     tr.querySelector('button').onclick = () => saveAssignment(item.aula, false);
                 } else {
-                    // AULA OCUPADA
                     let occNames = item.occupants.map(o => `${o.materia} (Grp ${o.grupo})`).join(', ');
                     tr.innerHTML = `
                         <td class="p-2 text-[10px] sm:text-xs overflow-hidden">
@@ -831,7 +862,6 @@
             const isUnassigning = (newAula === '' || newAula === 'S/A');
             const warnBox = document.getElementById('modal-warnings');
             
-            // Si escriben una aula nueva manual que no está en la lista de pestañas, añadirla
             if (!isUnassigning && !allRoomsList.includes(newAula)) {
                 allRoomsList.push(newAula);
             }
@@ -866,7 +896,6 @@
                     s.grupo === currentEditingSession.grupo
                 );
 
-                // Recopilar choques de todos los días de la materia primero
                 let allConflicts = [];
                 if (!isUnassigning) {
                     for(let s of relatedSessions) {
@@ -889,7 +918,6 @@
                     return;
                 }
 
-                // Aplicar el cambio y el intercambio a los afectados
                 relatedSessions.forEach(s => {
                     let oldAula = s.aula || 'S/A';
                     
@@ -907,12 +935,131 @@
             modal.classList.add('hidden');
             modal.classList.remove('flex');
             
-            // Si estamos en la vista Aula, abrimos la pestaña de la nueva aula
             if(groupingModeSelect.value === 'AULA' && !isUnassigning) {
                 activeGroupTab = newAula;
             }
             
             updateDashboardAndGroups();
+        };
+
+        // --- MOTOR DE OPTIMIZACIÓN (ALTA Y POCA DEMANDA) ---
+        const isAltaDemanda = (session) => {
+            const mat = normalizeString(session.materia);
+            const grp = normalizeString(session.grupo);
+            
+            if (grp.includes('3A') || grp.includes('3B')) {
+                if (mat.includes('NEUROPSICOLOGIA I') || mat.includes('ANALISIS EXPERIMENTAL') || mat.includes('PSICOANALISIS') || mat.includes('PSICOMETRICA')) return true;
+            }
+            if (grp.includes('4A') || grp.includes('4B')) {
+                if (mat.includes('COGNITIVA') || mat.includes('NEUROPSICOLOGIA II') || mat.includes('PSICOANALISIS') || mat.includes('COMPORTAMIENTO') || mat.includes('HUMANISTICA')) return true;
+            }
+            if (grp.includes('5A') || grp.includes('5B')) {
+                if (mat.includes('PSICOLINGUISTICA')) return true;
+            }
+            return false;
+        };
+
+        const isPocaDemanda = (session) => {
+            const mat = normalizeString(session.materia);
+            const grp = normalizeString(session.grupo);
+            
+            if (grp.includes('2A') || grp.includes('2B') || grp.includes('2C') || grp.includes('2D')) {
+                if (mat.includes('EPISTEMOLOGIA')) return true;
+            }
+            if (grp.includes('2D') && mat.includes('PSICOFISIOLOGIA')) return true;
+            return false;
+        };
+
+        const autoOptimizeRooms = () => {
+            if (Object.keys(roomCapacities).length === 0) {
+                alert("Debes sincronizar el archivo 'capacidad_aula.xlsx' para que el sistema reconozca cuáles son las aulas grandes y pequeñas.");
+                return;
+            }
+
+            let logs = [];
+            let swapsCount = 0;
+
+            const bigRooms = Object.keys(roomCapacities).filter(r => roomCapacities[r] >= 61);
+            const smallRooms = Object.keys(roomCapacities).filter(r => roomCapacities[r] <= 60);
+
+            if (bigRooms.length === 0) {
+                alert("No se detectaron aulas grandes (capacidad >= 61) en la configuración actual.");
+                return;
+            }
+
+            const isRoomFree = (aula, dia, horario, ignoreId) => {
+                return !scheduleData.some(s => s.id !== ignoreId && s.aula === aula && s.dia === dia && checkTimeOverlap(s.horario, horario));
+            };
+
+            // 1. Alta Demanda a Aulas Grandes
+            scheduleData.filter(s => isAltaDemanda(s)).forEach(sAlta => {
+                let curCap = roomCapacities[sAlta.aula];
+                if (sAlta.aula === 'S/A' || curCap === undefined || curCap <= 60) {
+                    
+                    // Buscar aula grande libre
+                    let freeBigRoom = bigRooms.find(r => isRoomFree(r, sAlta.dia, sAlta.horario, sAlta.id));
+                    if (freeBigRoom) {
+                        let oldRoom = sAlta.aula || 'S/A';
+                        sAlta.aula = freeBigRoom;
+                        swapsCount++;
+                        logs.push(`✅ <b>${sAlta.materia} (${sAlta.grupo})</b> movida del ${oldRoom} al <b>${freeBigRoom}</b> (Aula Grande libre).`);
+                        return; 
+                    }
+
+                    // Si no hay libres, buscar aula grande ocupada por Poca Demanda para Trueque
+                    let pocOccupant = scheduleData.find(sPoca => 
+                        isPocaDemanda(sPoca) && 
+                        bigRooms.includes(sPoca.aula) && 
+                        sPoca.dia === sAlta.dia && 
+                        checkTimeOverlap(sPoca.horario, sAlta.horario)
+                    );
+
+                    if (pocOccupant) {
+                        let aulaGrande = pocOccupant.aula;
+                        let aulaPequena = sAlta.aula; 
+                        
+                        let targetSmallRoom = aulaPequena;
+                        if (aulaPequena === 'S/A' || aulaPequena === '') {
+                            targetSmallRoom = smallRooms.find(r => isRoomFree(r, pocOccupant.dia, pocOccupant.horario, pocOccupant.id)) || 'S/A';
+                        }
+
+                        sAlta.aula = aulaGrande;
+                        pocOccupant.aula = targetSmallRoom;
+                        swapsCount++;
+                        logs.push(`🔄 <b>TRUEQUE:</b> <b>${sAlta.materia} (Grp ${sAlta.grupo})</b> subió al <b>${aulaGrande}</b>, y <b>${pocOccupant.materia} (Grp ${pocOccupant.grupo})</b> bajó al <b>${targetSmallRoom}</b>.`);
+                    }
+                }
+            });
+
+            // 2. Poca Demanda en Aulas Grandes (solo liberarlas si sobran aulas chicas)
+            scheduleData.filter(s => isPocaDemanda(s)).forEach(sPoca => {
+                let curCap = roomCapacities[sPoca.aula];
+                if (curCap !== undefined && curCap >= 61) {
+                    let freeSmallRoom = smallRooms.find(r => isRoomFree(r, sPoca.dia, sPoca.horario, sPoca.id));
+                    if (freeSmallRoom) {
+                        let oldRoom = sPoca.aula;
+                        sPoca.aula = freeSmallRoom;
+                        swapsCount++;
+                        logs.push(`🔽 <b>${sPoca.materia} (${sPoca.grupo})</b> bajó del ${oldRoom} al <b>${freeSmallRoom}</b> (Para liberar aula grande).`);
+                    }
+                }
+            });
+
+            updateDashboardAndGroups();
+
+            const resultsList = document.getElementById('optimization-logs');
+            const resultsTitle = document.getElementById('optimization-title');
+
+            if (swapsCount > 0) {
+                resultsTitle.textContent = `¡Se realizaron ${swapsCount} mejoras automáticas!`;
+                resultsList.innerHTML = logs.map(l => `<div class="p-3 bg-slate-50 border-l-4 border-emerald-500 mb-2 text-xs sm:text-sm text-slate-700">${l}</div>`).join('');
+            } else {
+                resultsTitle.textContent = "Oferta Optimizada";
+                resultsList.innerHTML = `<div class="p-6 text-center text-slate-500 italic">No se requirió realizar trueques. Las materias de alta demanda ya están en aulas grandes, o no hay cruces compatibles en sus horarios.</div>`;
+            }
+            
+            modalOpt.classList.remove('hidden');
+            modalOpt.classList.add('flex');
         };
 
         // --- LISTADO GENERAL ---
@@ -959,76 +1106,55 @@
         };
 
         const prepareExportView = () => {
-            // En lugar de achicar la tabla real, creamos un CLON perfecto y lo preparamos
             const clone = horarioPdfWrapper.cloneNode(true);
             clone.id = 'export-clone';
             clone.classList.add('export-mode');
-            
-            // Ocultamos los lapicitos para que el PDF se vea limpio
             clone.querySelectorAll('.no-export').forEach(el => el.style.display = 'none');
-            
-            // Lo pegamos al body, pero gracias al CSS estará fuera de pantalla (-9999px)
             document.body.appendChild(clone);
             return clone;
         };
 
         const cleanupExportView = (clone) => {
-            // Una vez tomada la foto, borramos el clon
-            if (clone && clone.parentNode) {
-                clone.parentNode.removeChild(clone);
-            }
+            if (clone && clone.parentNode) clone.parentNode.removeChild(clone);
         };
 
         const exportToPdf = async () => {
             if (!activeGroupTab) { alert("Sincroniza los datos primero."); return; }
             const clone = prepareExportView(); 
             try {
-                // Tomamos la foto al clon con ancho forzado de 1400px
-                const canvas = await html2canvas(clone, { 
-                    scale: 2, 
-                    useCORS: true,
-                    windowWidth: 1400 
-                });
-                
+                const canvas = await html2canvas(clone, { scale: 2, useCORS: true, windowWidth: 1400 });
                 const imgData = canvas.toDataURL("image/jpeg", 0.95);
                 const { jsPDF } = window.jspdf;
                 const pdf = new jsPDF("l", "mm", "a4"); 
-                
                 const pageWidth = pdf.internal.pageSize.getWidth();
                 const pageHeight = pdf.internal.pageSize.getHeight();
                 
                 pdf.setFont("helvetica", "bold");
                 pdf.setFontSize(16);
-                
                 const prefixTitle = groupingModeSelect.value === 'AULA' ? 'Aula:' : 'Horario:';
                 pdf.text(`${prefixTitle} ${activeGroupTab}`, pageWidth / 2, 15, { align: "center" });
                 
                 const margin = 10;
-                const headerHeight = 25; // Altura a la que empieza la imagen para no tapar el título
+                const headerHeight = 25; 
                 const availableWidth = pageWidth - (margin * 2);
-                
                 const imgWidth = availableWidth; 
                 const imgHeight = (canvas.height * imgWidth) / canvas.width;
                 
                 let heightLeft = imgHeight;
                 let position = headerHeight;
                 
-                // Imprimir primera página
                 pdf.addImage(imgData, "JPEG", margin, position, imgWidth, imgHeight);
                 heightLeft -= (pageHeight - headerHeight);
 
-                // Lógica Multi-Página por si el horario es súper largo (muchos turnos)
                 while (heightLeft > 0) {
                     position -= pageHeight;
                     pdf.addPage();
                     pdf.addImage(imgData, "JPEG", margin, position, imgWidth, imgHeight);
                     heightLeft -= pageHeight;
                 }
-                
                 pdf.save(`Horario_${activeGroupTab.replace(/\s+/g, '_')}.pdf`);
             } catch (err) {
-                console.error(err); 
-                alert("Error al generar PDF.");
+                console.error(err); alert("Error al generar PDF.");
             } finally {
                 cleanupExportView(clone);
             }
@@ -1038,11 +1164,7 @@
             if (!activeGroupTab) { alert("Sincroniza los datos primero."); return; }
             const clone = prepareExportView(); 
             try {
-                const canvas = await html2canvas(clone, { 
-                    scale: 2, 
-                    useCORS: true,
-                    windowWidth: 1400
-                });
+                const canvas = await html2canvas(clone, { scale: 2, useCORS: true, windowWidth: 1400 });
                 const link = document.createElement('a');
                 link.download = `Horario_${activeGroupTab.replace(/\s+/g, '_')}.png`;
                 link.href = canvas.toDataURL('image/png');
@@ -1058,7 +1180,24 @@
             btnSync.disabled = true;
 
             try {
-                // Cargar "Maestro por Aula"
+                // 1. Cargar Capacidades (REQUERIDO PARA OPTIMIZAR)
+                statusCapacidades.textContent = "Buscando...";
+                statusCapacidades.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600";
+                
+                let resCap = await fetch('capacidad_aula.xlsx').catch(() => null);
+                if (resCap && resCap.ok) {
+                    const bufCap = await resCap.arrayBuffer();
+                    const wbCap = XLSX.read(new Uint8Array(bufCap), { type: 'array' });
+                    const jsonCap = XLSX.utils.sheet_to_json(wbCap.Sheets[wbCap.SheetNames[0]]);
+                    processCapacidades(jsonCap);
+                    statusCapacidades.textContent = `✅ Listo (${Object.keys(roomCapacities).length})`;
+                    statusCapacidades.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700";
+                } else {
+                    statusCapacidades.textContent = "❌ No encontrado";
+                    statusCapacidades.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700";
+                }
+
+                // 2. Cargar Horarios "Maestro por Aula"
                 statusHorarios.textContent = "Buscando...";
                 statusHorarios.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600";
                 
@@ -1091,10 +1230,19 @@
 
         // --- EVENT LISTENERS ---
         btnSync.addEventListener('click', loadData);
+        btnOptimize.addEventListener('click', autoOptimizeRooms);
 
         btnCloseModal.addEventListener('click', () => {
             modal.classList.add('hidden');
             modal.classList.remove('flex');
+        });
+        btnCloseOpt.addEventListener('click', () => {
+            modalOpt.classList.add('hidden');
+            modalOpt.classList.remove('flex');
+        });
+        btnOkOpt.addEventListener('click', () => {
+            modalOpt.classList.add('hidden');
+            modalOpt.classList.remove('flex');
         });
 
         btnSaveManual.addEventListener('click', () => saveAssignment(inputManualRoom.value));
