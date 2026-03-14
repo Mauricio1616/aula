@@ -959,17 +959,6 @@
             return false;
         };
 
-        const isPocaDemanda = (session) => {
-            const mat = normalizeString(session.materia);
-            const grp = normalizeString(session.grupo);
-            
-            if (grp.includes('2A') || grp.includes('2B') || grp.includes('2C') || grp.includes('2D')) {
-                if (mat.includes('EPISTEMOLOGIA')) return true;
-            }
-            if (grp.includes('2D') && mat.includes('PSICOFISIOLOGIA')) return true;
-            return false;
-        };
-
         const autoOptimizeRooms = () => {
             if (Object.keys(roomCapacities).length === 0) {
                 alert("Debes sincronizar el archivo 'capacidad_aula.xlsx' para que el sistema reconozca cuáles son las aulas grandes y pequeñas.");
@@ -991,59 +980,51 @@
                 return !scheduleData.some(s => s.id !== ignoreId && s.aula === aula && s.dia === dia && checkTimeOverlap(s.horario, horario));
             };
 
-            // 1. Alta Demanda a Aulas Grandes
+            // 1. Alta Demanda a Aulas Grandes (Evaluando día por día independientemente)
             scheduleData.filter(s => isAltaDemanda(s)).forEach(sAlta => {
                 let curCap = roomCapacities[sAlta.aula];
                 if (sAlta.aula === 'S/A' || curCap === undefined || curCap <= 60) {
                     
-                    // Buscar aula grande libre
+                    // a) Buscar aula grande libre en ese día/hora
                     let freeBigRoom = bigRooms.find(r => isRoomFree(r, sAlta.dia, sAlta.horario, sAlta.id));
                     if (freeBigRoom) {
                         let oldRoom = sAlta.aula || 'S/A';
                         sAlta.aula = freeBigRoom;
                         swapsCount++;
-                        logs.push(`✅ <b>${sAlta.materia} (${sAlta.grupo})</b> movida del ${oldRoom} al <b>${freeBigRoom}</b> (Aula Grande libre).`);
+                        logs.push(`✅ <b>${sAlta.dia} ${sAlta.horario}:</b> <b>${sAlta.materia} (${sAlta.grupo})</b> se movió del ${oldRoom} al <b>${freeBigRoom}</b> (Aula Grande libre).`);
                         return; 
                     }
 
-                    // Si no hay libres, buscar aula grande ocupada por Poca Demanda para Trueque
-                    let pocOccupant = scheduleData.find(sPoca => 
-                        isPocaDemanda(sPoca) && 
-                        bigRooms.includes(sPoca.aula) && 
-                        sPoca.dia === sAlta.dia && 
-                        checkTimeOverlap(sPoca.horario, sAlta.horario)
+                    // b) Si no hay libres, buscar aula grande ocupada por una materia que NO sea de Alta Demanda para hacer Trueque
+                    // Esto permite cruzarse con "Estadística" u otras materias de demanda regular/poca
+                    let occupant = scheduleData.find(sOther => 
+                        !isAltaDemanda(sOther) && 
+                        bigRooms.includes(sOther.aula) && 
+                        sOther.dia === sAlta.dia && 
+                        checkTimeOverlap(sOther.horario, sAlta.horario)
                     );
 
-                    if (pocOccupant) {
-                        let aulaGrande = pocOccupant.aula;
+                    if (occupant) {
+                        let aulaGrande = occupant.aula;
                         let aulaPequena = sAlta.aula; 
                         
                         let targetSmallRoom = aulaPequena;
+                        // Si el Alta Demanda estaba "S/A", buscamos una pequeña libre para el ocupante
                         if (aulaPequena === 'S/A' || aulaPequena === '') {
-                            targetSmallRoom = smallRooms.find(r => isRoomFree(r, pocOccupant.dia, pocOccupant.horario, pocOccupant.id)) || 'S/A';
+                            targetSmallRoom = smallRooms.find(r => isRoomFree(r, occupant.dia, occupant.horario, occupant.id)) || 'S/A';
                         }
 
                         sAlta.aula = aulaGrande;
-                        pocOccupant.aula = targetSmallRoom;
+                        occupant.aula = targetSmallRoom;
                         swapsCount++;
-                        logs.push(`🔄 <b>TRUEQUE:</b> <b>${sAlta.materia} (Grp ${sAlta.grupo})</b> subió al <b>${aulaGrande}</b>, y <b>${pocOccupant.materia} (Grp ${pocOccupant.grupo})</b> bajó al <b>${targetSmallRoom}</b>.`);
+                        logs.push(`🔄 <b>TRUEQUE (${sAlta.dia} ${sAlta.horario}):</b> <b>${sAlta.materia} (Grp ${sAlta.grupo})</b> subió al <b>${aulaGrande}</b>, y <b>${occupant.materia} (Grp ${occupant.grupo})</b> bajó al <b>${targetSmallRoom}</b>.`);
                     }
                 }
             });
 
-            // 2. Poca Demanda en Aulas Grandes (solo liberarlas si sobran aulas chicas)
-            scheduleData.filter(s => isPocaDemanda(s)).forEach(sPoca => {
-                let curCap = roomCapacities[sPoca.aula];
-                if (curCap !== undefined && curCap >= 61) {
-                    let freeSmallRoom = smallRooms.find(r => isRoomFree(r, sPoca.dia, sPoca.horario, sPoca.id));
-                    if (freeSmallRoom) {
-                        let oldRoom = sPoca.aula;
-                        sPoca.aula = freeSmallRoom;
-                        swapsCount++;
-                        logs.push(`🔽 <b>${sPoca.materia} (${sPoca.grupo})</b> bajó del ${oldRoom} al <b>${freeSmallRoom}</b> (Para liberar aula grande).`);
-                    }
-                }
-            });
+            // Hemos quitado el paso 2 de mover "Poca Demanda" proactivamente 
+            // para asegurar que las materias como "Estadística" conserven su Aula Grande
+            // los días donde no hay choques (como el día Viernes que mencionaste).
 
             updateDashboardAndGroups();
 
@@ -1055,7 +1036,7 @@
                 resultsList.innerHTML = logs.map(l => `<div class="p-3 bg-slate-50 border-l-4 border-emerald-500 mb-2 text-xs sm:text-sm text-slate-700">${l}</div>`).join('');
             } else {
                 resultsTitle.textContent = "Oferta Optimizada";
-                resultsList.innerHTML = `<div class="p-6 text-center text-slate-500 italic">No se requirió realizar trueques. Las materias de alta demanda ya están en aulas grandes, o no hay cruces compatibles en sus horarios.</div>`;
+                resultsList.innerHTML = `<div class="p-6 text-center text-slate-500 italic">No se requirió realizar trueques. Las materias de alta demanda ya están en aulas grandes para los días programados.</div>`;
             }
             
             modalOpt.classList.remove('hidden');
@@ -1201,7 +1182,7 @@
                 statusHorarios.textContent = "Buscando...";
                 statusHorarios.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600";
                 
-                let resHor = await fetch('Maestro por Aula 148-2.xlsx').catch(() => null);
+                let resHor = await fetch('horarios.xlsx').catch(() => null);
                 if (resHor && resHor.ok) {
                     const bufHor = await resHor.arrayBuffer();
                     const wbHor = XLSX.read(new Uint8Array(bufHor), { type: 'array' });
