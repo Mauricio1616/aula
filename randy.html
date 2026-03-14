@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administración de Aulas - Facultad</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9;
+            color: #0f172a;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .modal-animate { animation: fadeInScale 0.2s ease-out; }
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* --- ESTILOS DE LA GRILLA DE HORARIOS --- */
+        #schedule-container table { border-collapse: separate; border-spacing: 0; background: white; }
+        #schedule-container th {
+            background-color: #0f172a; color: white; font-weight: 600; text-transform: uppercase;
+            font-size: 0.75rem; letter-spacing: 0.05em; border: 1px solid #1e293b; padding: 8px 4px;
+            position: sticky; top: 0; z-index: 10;
+        }
+        @media (min-width: 640px) { #schedule-container th { font-size: 0.85rem; padding: 12px 4px; } }
+        #schedule-container td { border: 1px solid #e2e8f0; height: 50px; vertical-align: top; transition: all 0.2s; position: relative; }
+        @media (min-width: 640px) { #schedule-container td { height: 60px; } }
+        #schedule-container td:first-child {
+            background-color: #f1f5f9; color: #475569; font-weight: 700; font-size: 0.65rem; 
+            vertical-align: middle; width: 60px; position: sticky; left: 0; z-index: 5;
+        }
+        @media (min-width: 640px) { #schedule-container td:first-child { font-size: 0.75rem; width: 80px; } }
+
+        /* Tabs */
+        .tab {
+            background: white; border: 1px solid #cbd5e1; color: #475569; font-size: 0.75rem;
+            border-radius: 6px; transition: all 0.2s; padding: 6px 12px; font-weight: 500;
+            white-space: nowrap; cursor: pointer;
+        }
+        @media (min-width: 640px) { .tab { font-size: 0.8rem; padding: 6px 16px; } }
+        .tab:hover { background-color: #f1f5f9; }
+        .tab.active { background-color: #0f172a; color: white; border-color: #0f172a; }
+        .tab.has-error { border-color: #fca5a5; color: #ef4444; background-color: #fef2f2; }
+        .tab.active.has-error { background-color: #991b1b; color: white; border-color: #991b1b; }
+
+        /* Insignias */
+        .room-pill {
+            background: white; border: 1px solid #cbd5e1; border-radius: 12px; padding: 2px 6px;
+            font-size: 0.65rem; color: #475569; box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-top: 4px;
+            display: inline-flex; align-items: center; gap: 4px; font-family: monospace; font-weight: bold; cursor: pointer;
+        }
+        .room-pill:hover { background: #f8fafc; border-color: #94a3b8; }
+        .room-pill.error { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
+        .room-pill.warning { background: #ffedd5; border-color: #fdba74; color: #c2410c; }
+
+        /* --- ESTILOS DE EXPORTACIÓN (MODO CLON) --- */
+        .export-mode { 
+            position: absolute !important;
+            top: -9999px !important;
+            left: -9999px !important;
+            width: 1400px !important; 
+            height: auto !important; 
+            overflow: visible !important; 
+            background-color: white !important; 
+            padding: 30px !important; 
+            z-index: -100 !important;
+        }
+        .export-mode table { 
+            width: 100% !important; 
+            border-collapse: collapse !important; 
+            border: 2px solid #1e293b !important; 
+            table-layout: fixed !important; 
+        }
+        .export-mode th { 
+            background-color: #0f172a !important; 
+            color: #fff !important; 
+            border: 1px solid #1e293b !important; 
+            font-size: 13px !important; 
+            padding: 10px !important; 
+            position: static !important; 
+        }
+        .export-mode td { 
+            height: auto !important; 
+            min-height: 60px !important; 
+            border: 1px solid #cbd5e1 !important; 
+            padding: 6px !important; 
+            position: static !important; 
+        }
+        .export-mode td:first-child { 
+            background-color: #f1f5f9 !important; 
+            color: #1e293b !important; 
+            width: 80px !important; 
+            position: static !important;
+        }
+        .export-mode .truncate { 
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+        }
+        .export-mode .subject-cell-content {
+            padding: 6px !important;
+            border: 1px solid #e2e8f0 !important;
+            box-shadow: none !important;
+        }
+        .export-mode .room-pill { 
+            background: none !important; 
+            border: none !important; 
+            box-shadow: none !important; 
+            color: #000 !important; 
+            padding: 0 !important; 
+            font-size: 11px !important; 
+            margin-top: 6px !important;
+        }
+    </style>
+</head>
+<body class="p-2 sm:p-4 md:p-6 min-h-screen flex flex-col gap-4 max-w-[1600px] mx-auto">
+
+    <!-- HEADER ADMINISTRATIVO -->
+    <header class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-5 flex flex-col md:flex-row justify-between items-center gap-4 border-l-4 sm:border-l-8 border-l-slate-800">
+        <div class="text-center md:text-left">
+            <h1 class="text-xl sm:text-2xl md:text-3xl font-bold text-slate-800 tracking-tight">Gestor de Aulas y Espacios</h1>
+            <p class="text-slate-500 text-xs sm:text-sm mt-1">Panel de control basado en <strong>Maestro por Aula</strong></p>
+        </div>
+        
+        <div class="flex flex-wrap justify-center gap-2 sm:gap-3 text-xs sm:text-sm w-full md:w-auto">
+            <button id="btn-optimize" class="flex-1 md:flex-none px-3 sm:px-4 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold rounded-lg transition flex justify-center items-center gap-2 border border-emerald-300">
+                <span>✨</span> Optimizar
+            </button>
+            <button id="btn-teachers" class="flex-1 md:flex-none px-3 sm:px-4 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-medium rounded-lg transition flex justify-center items-center gap-2 border border-indigo-300">
+                <span>📋</span> Listado General
+            </button>
+            <button id="btn-sync" class="flex-1 md:flex-none px-3 sm:px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg shadow transition flex justify-center items-center gap-2">
+                <span>🔄</span> Cargar Excel
+            </button>
+        </div>
+    </header>
+
+    <!-- ESTADO DE ARCHIVOS Y DASHBOARD -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <!-- Status Archivos -->
+        <div class="col-span-2 md:col-span-1 bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center">
+            <h3 class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 sm:mb-3">Conexión a Datos</h3>
+            <div class="space-y-1.5 sm:space-y-2">
+                <div class="flex justify-between items-center text-xs sm:text-sm">
+                    <span class="flex items-center gap-1 font-medium text-slate-600 truncate mr-2">📄 horarios.xlsx</span>
+                    <span id="status-horarios" class="text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Esperando...</span>
+                </div>
+                <div class="flex justify-between items-center text-xs sm:text-sm">
+                    <span class="flex items-center gap-1 font-medium text-slate-600 truncate mr-2">📊 capacidad_aula.xlsx</span>
+                    <span id="status-capacidades" class="text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Esperando...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI 1 -->
+        <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-4 text-center sm:text-left">
+            <div class="bg-blue-50 text-blue-600 w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-lg sm:text-xl shadow-inner">📚</div>
+            <div>
+                <p class="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Total Sesiones</p>
+                <p id="kpi-total" class="text-xl sm:text-2xl font-black text-slate-800">0</p>
+            </div>
+        </div>
+
+        <!-- KPI 2 -->
+        <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-4 text-center sm:text-left">
+            <div class="bg-indigo-50 text-indigo-600 w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-lg sm:text-xl shadow-inner">🚪</div>
+            <div>
+                <p class="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Aulas Detectadas</p>
+                <p id="kpi-rooms" class="text-xl sm:text-2xl font-black text-indigo-600">0</p>
+            </div>
+        </div>
+
+        <!-- KPI 3 -->
+        <div class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-4 text-center sm:text-left">
+            <div class="bg-red-50 text-red-600 w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-lg sm:text-xl shadow-inner">🚨</div>
+            <div>
+                <p class="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Choques</p>
+                <p id="kpi-conflicts" class="text-xl sm:text-2xl font-black text-red-600">0</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- VISOR DE GRILLA HORARIA -->
+    <main class="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col flex-1 min-h-[500px] overflow-hidden p-3 sm:p-5">
+        
+        <!-- Pestañas y Controles -->
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-2 sm:mb-4 gap-3">
+            <div class="flex items-center gap-3 w-full md:w-auto">
+                <h2 class="font-bold text-slate-800 flex items-center gap-2">
+                    <span>📅</span> Programación
+                </h2>
+                <!-- SELECTOR DE VISTA -->
+                <select id="grouping-mode" class="p-1.5 bg-slate-50 border border-slate-300 rounded text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
+                    <option value="AULA" selected>👁️ Ver por Aula (Recomendado)</option>
+                    <option value="GRUPO">👥 Ver por Grupo</option>
+                </select>
+            </div>
+            
+            <div class="text-[10px] sm:text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded border border-slate-200 flex flex-wrap gap-3 sm:gap-4 w-full md:w-auto justify-center">
+                <span class="flex items-center gap-1"><span class="w-3 h-3 bg-red-100 border border-red-300 rounded block"></span> Choque Detectado</span>
+            </div>
+        </div>
+
+        <!-- TABS (Scrollable) -->
+        <div class="overflow-x-auto custom-scrollbar pb-3 mb-2 border-b border-slate-100">
+            <div id="tabs-container" class="flex gap-2 w-max px-1">
+                <p class="text-sm text-slate-400 italic py-2">Sincroniza los datos para ver las aulas...</p>
+            </div>
+        </div>
+
+        <!-- LA GRILLA -->
+        <div class="relative rounded-sm border border-slate-200 flex-1 flex flex-col bg-slate-50">
+            <div id="horario-pdf" class="bg-white p-1 overflow-x-auto custom-scrollbar flex-1">
+                <div id="schedule-container">
+                    <table class="w-full min-w-[700px] sm:min-w-[900px] text-center text-xs sm:text-sm">
+                        <thead>
+                            <tr>
+                                <th class="w-14 sm:w-20">HORA</th>
+                                <th>LUNES</th>
+                                <th>MARTES</th>
+                                <th>MIÉRC</th>
+                                <th>JUEVES</th>
+                                <th>VIERNES</th>
+                                <th>SÁBADO</th>
+                            </tr>
+                        </thead>
+                        <tbody id="schedule-tbody">
+                            <tr>
+                                <td colspan="7" class="py-20 text-slate-400 italic">
+                                    Sincroniza los datos para visualizar la programación.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botones de Exportación -->
+        <div class="flex gap-3 mt-4 justify-end border-t border-slate-200 pt-4">
+            <button id="export-img-btn" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg shadow text-xs flex items-center justify-center gap-1 transition">📸 Descargar Imagen</button>
+            <button id="export-pdf-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow text-xs flex items-center justify-center gap-1 transition">📄 Descargar PDF</button>
+        </div>
+    </main>
+
+    <!-- MODAL DE ASIGNACIÓN DE AULA -->
+    <div id="modal-assign" class="fixed inset-0 bg-slate-900 bg-opacity-75 z-[60] hidden justify-center items-center p-2 sm:p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] flex flex-col modal-animate border-t-4 sm:border-t-8 border-slate-800">
+            
+            <!-- Modal Header -->
+            <div class="p-4 sm:p-5 border-b border-slate-200 flex justify-between items-start bg-slate-50 rounded-t-lg">
+                <div>
+                    <h3 class="text-lg sm:text-xl font-bold text-slate-800 mb-1 leading-tight" id="modal-subject-name">Nombre de la Materia</h3>
+                    <div class="flex flex-wrap gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-medium text-slate-500 mt-2">
+                        <span class="bg-white border border-slate-300 px-2 py-1 rounded shadow-sm font-mono text-slate-700" id="modal-sigla">Sigla</span>
+                        <span class="bg-white border border-slate-300 px-2 py-1 rounded shadow-sm" id="modal-group">Grupo: S/G</span>
+                        <span class="bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded shadow-sm font-bold flex items-center gap-1">🕒 <span id="modal-time">LUNES 07:00-08:30</span></span>
+                    </div>
+                </div>
+                <button id="modal-close-btn" class="text-slate-400 hover:text-red-500 font-bold text-2xl sm:text-xl leading-none">&times;</button>
+            </div>
+
+            <!-- Modal Body (Two columns) -->
+            <div class="flex flex-col md:flex-row flex-1 overflow-hidden">
+                
+                <!-- Left Col: Formulario Manual -->
+                <div class="w-full md:w-1/3 border-b md:border-b-0 md:border-r border-slate-200 p-4 sm:p-5 bg-white flex flex-col gap-3 sm:gap-4 overflow-y-auto">
+                    <div>
+                        <label class="block text-[10px] sm:text-xs font-bold text-slate-500 uppercase mb-1">Aula Actual</label>
+                        <div class="p-2.5 sm:p-3 bg-slate-100 rounded-lg border border-slate-200 font-mono font-bold text-slate-700 text-base sm:text-lg" id="modal-current-room">S/A</div>
+                    </div>
+                    
+                    <hr class="border-slate-100 hidden md:block">
+
+                    <div>
+                        <label class="block text-[10px] sm:text-xs font-bold text-slate-500 uppercase mb-1">Reasignación Manual</label>
+                        <p class="text-[9px] sm:text-[10px] text-slate-400 mb-2 leading-tight">Mueve esta materia a otra Aula o crea una nueva.</p>
+                        <input type="text" id="manual-room-input" class="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-slate-800 outline-none uppercase font-mono text-sm" placeholder="Ej. AULA 01">
+                        <button id="btn-save-manual" class="w-full mt-2 bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 rounded transition text-xs sm:text-sm">Guardar Manualmente</button>
+                    </div>
+
+                    <div class="mt-1 bg-slate-50 p-2 sm:p-3 rounded-lg border border-slate-200">
+                        <p class="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase mb-1.5">Aplicar cambio a:</p>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="flex items-center gap-2 text-[10px] sm:text-xs text-slate-700 cursor-pointer">
+                                <input type="radio" name="apply-scope" value="single" class="w-3 h-3 sm:w-4 sm:h-4 text-slate-800 focus:ring-slate-800" checked>
+                                <span>Solo a este día (<span id="scope-single-text" class="font-bold text-blue-700"></span>)</span>
+                            </label>
+                            <label class="flex items-center gap-2 text-[10px] sm:text-xs text-slate-700 cursor-pointer">
+                                <input type="radio" name="apply-scope" value="all" class="w-3 h-3 sm:w-4 sm:h-4 text-slate-800 focus:ring-slate-800">
+                                Todos los días de este Grupo
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div id="modal-warnings" class="hidden p-2.5 sm:p-3 bg-red-50 border border-red-200 text-red-700 text-[10px] sm:text-xs rounded-lg mt-auto">
+                        <!-- Alertas de choque aquí -->
+                    </div>
+                </div>
+
+                <!-- Right Col: Buscador Inteligente de Aulas -->
+                <div class="w-full md:w-2/3 bg-slate-50 p-4 sm:p-5 flex flex-col overflow-hidden">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-2 sm:mb-3 gap-2">
+                        <div>
+                            <h4 class="font-bold text-sm sm:text-base text-slate-800">Catálogo de Aulas</h4>
+                            <p class="text-[10px] sm:text-xs text-slate-500">Aulas para el horario de <span id="modal-time-ref" class="font-bold"></span></p>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 rounded-lg bg-white">
+                        <table class="w-full text-left text-xs sm:text-sm">
+                            <thead class="bg-slate-100 sticky top-0 shadow-sm z-10">
+                                <tr>
+                                    <th class="p-2 font-semibold text-slate-600 text-[10px] sm:text-xs uppercase">Aula (Pestaña)</th>
+                                    <th class="p-2 font-semibold text-slate-600 text-[10px] sm:text-xs uppercase text-center w-24">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="available-rooms-list" class="divide-y divide-slate-100">
+                                <!-- Generado por JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL LISTADO GENERAL -->
+    <div id="modal-teachers" class="fixed inset-0 bg-slate-900 bg-opacity-75 z-[60] hidden justify-center items-center p-2 sm:p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] sm:max-h-[90vh] flex flex-col modal-animate border-t-4 sm:border-t-8 border-indigo-600">
+            <div class="p-4 sm:p-5 border-b border-slate-200 flex justify-between items-start bg-slate-50 rounded-t-lg">
+                <div>
+                    <h3 class="text-lg sm:text-xl font-bold text-slate-800 mb-1">Listado General</h3>
+                    <p class="text-[10px] sm:text-xs text-slate-500 mt-1">Busca cualquier materia o aula en toda la oferta.</p>
+                </div>
+                <button id="modal-teachers-close" class="text-slate-400 hover:text-red-500 font-bold text-2xl sm:text-xl leading-none">&times;</button>
+            </div>
+            <div class="p-3 sm:p-4 border-b border-slate-200">
+                <input type="text" id="teacher-search" placeholder="Escribe para buscar (Ej. PSI402, Aula 1)..." class="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+            </div>
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-2 sm:p-4">
+                <table class="w-full text-left text-[10px] sm:text-xs">
+                    <thead class="bg-slate-100 sticky top-0 shadow-sm z-10">
+                        <tr>
+                            <th class="p-2 sm:p-3 font-semibold text-slate-600 uppercase">Materia / Grupo</th>
+                            <th class="p-2 sm:p-3 font-semibold text-slate-600 uppercase">Sigla</th>
+                            <th class="p-2 sm:p-3 font-semibold text-slate-600 uppercase">Día y Hora</th>
+                            <th class="p-2 sm:p-3 font-semibold text-slate-600 uppercase text-center">Aula</th>
+                        </tr>
+                    </thead>
+                    <tbody id="teachers-table-body" class="divide-y divide-slate-100 text-slate-700">
+                        <!-- Generado por JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL RESULTADOS DE OPTIMIZACIÓN -->
+    <div id="modal-optimization" class="fixed inset-0 bg-slate-900 bg-opacity-75 z-[70] hidden justify-center items-center p-2 sm:p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col modal-animate border-t-4 sm:border-t-8 border-emerald-500">
+            <div class="p-4 border-b border-slate-200 flex justify-between items-start bg-slate-50 rounded-t-lg">
+                <div>
+                    <h3 class="text-xl font-bold text-slate-800" id="optimization-title">Resultados de Optimización</h3>
+                    <p class="text-xs text-slate-500">Ajuste de aulas por alta y poca demanda</p>
+                </div>
+                <button id="modal-optimization-close" class="text-slate-400 hover:text-red-500 font-bold text-xl leading-none">&times;</button>
+            </div>
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-4" id="optimization-logs">
+            </div>
+            <div class="p-4 border-t border-slate-200 bg-slate-50 text-right rounded-b-lg">
+                <button id="modal-optimization-ok" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow transition">Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // --- VARIABLES DE ESTADO ---
+    let scheduleData = [];     
+    let groupedData = {};      
+    let allRoomsList = [];     
+    let roomCapacities = {};   
+    let currentEditingSession = null; 
+    let activeGroupTab = null;
+
+    const randomColors = [
+        "#e0f2fe", "#dcfce7", "#f3e8ff", "#ffedd5", "#f1f5f9", "#fee2e2", "#ccfbf1", "#fae8ff", "#fef9c3", "#e0e7ff"
+    ];
+
+    document.addEventListener('DOMContentLoaded', () => {
+        
+        // DOM Elements
+        const btnSync = document.getElementById('btn-sync');
+        const btnOptimize = document.getElementById('btn-optimize');
+        const statusHorarios = document.getElementById('status-horarios');
+        const statusCapacidades = document.getElementById('status-capacidades');
+        
+        const kpiTotal = document.getElementById('kpi-total');
+        const kpiRooms = document.getElementById('kpi-rooms');
+        const kpiConflicts = document.getElementById('kpi-conflicts');
+        
+        const tabsContainer = document.getElementById('tabs-container');
+        const scheduleTbody = document.getElementById('schedule-tbody');
+        const groupingModeSelect = document.getElementById('grouping-mode');
+
+        // Modal Elements
+        const modal = document.getElementById('modal-assign');
+        const btnCloseModal = document.getElementById('modal-close-btn');
+        const inputManualRoom = document.getElementById('manual-room-input');
+        const btnSaveManual = document.getElementById('btn-save-manual');
+        const listAvailableRooms = document.getElementById('available-rooms-list');
+
+        const modalTeachers = document.getElementById('modal-teachers');
+        const btnTeachers = document.getElementById('btn-teachers');
+        const btnCloseTeachers = document.getElementById('modal-teachers-close');
+        const teacherSearch = document.getElementById('teacher-search');
+        const teachersTableBody = document.getElementById('teachers-table-body');
+        const horarioPdfWrapper = document.getElementById('horario-pdf');
+
+        // Modals Optimización
+        const modalOpt = document.getElementById('modal-optimization');
+        const btnCloseOpt = document.getElementById('modal-optimization-close');
+        const btnOkOpt = document.getElementById('modal-optimization-ok');
+
+        // --- UTILIDADES ---
+        const timeToMin = (timeStr) => {
+            if(!timeStr || !timeStr.includes(':')) return 0;
+            const [h, m] = timeStr.split(':').map(Number);
+            return (h * 60) + m;
+        };
+
+        const checkTimeOverlap = (timeA, timeB) => {
+            if(!timeA || !timeB || !timeA.includes('-') || !timeB.includes('-')) return false;
+            let startA = timeToMin(timeA.split('-')[0]);
+            let endA = timeToMin(timeA.split('-')[1]);
+            let startB = timeToMin(timeB.split('-')[0]);
+            let endB = timeToMin(timeB.split('-')[1]);
+            return (startA < endB && startB < endA);
+        };
+
+        const normalizeString = (str) => {
+            if (!str) return "";
+            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+        };
+
+        // --- PROCESAMIENTO DE EXCEL ---
+        const processCapacidades = (data) => {
+            roomCapacities = {};
+            data.forEach(row => {
+                let aula = row['AULA'] || row['Aula'] || row['NOMBRE'];
+                let cap = row['CAPACIDAD'] || row['Capacidad'] || row['ALUMNOS'];
+                if (aula && cap !== undefined) {
+                    roomCapacities[String(aula).trim().toUpperCase()] = parseInt(cap);
+                }
+            });
+        };
+
+        const processHorariosVisual = (wb) => {
+            let sessions = [];
+            let idCounter = 1;
+            let foundRooms = new Set();
+
+            wb.SheetNames.forEach(sheetName => {
+                const aulaName = String(sheetName).trim().toUpperCase();
+                foundRooms.add(aulaName);
+                
+                const data = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: "" });
+                
+                let headerRowIdx = -1;
+                for (let i = 0; i < data.length; i++) {
+                    const rowStr = data[i].map(c => String(c).toUpperCase()).join(' ');
+                    if (rowStr.includes('LUNES') || rowStr.includes('MARTES')) {
+                        headerRowIdx = i;
+                        break;
+                    }
+                }
+
+                if (headerRowIdx === -1) return;
+
+                const headers = data[headerRowIdx].map(h => String(h).toUpperCase().trim());
+                const dayCols = {};
+                ['LUNES', 'MARTES', 'MIÉRCOLES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'SABADO'].forEach(day => {
+                    const idx = headers.findIndex(h => h === day);
+                    if (idx !== -1) dayCols[day.replace('É', 'E').replace('Á', 'A')] = idx;
+                });
+                const horaIdx = headers.findIndex(h => h.includes('HORA')) !== -1 ? headers.findIndex(h => h.includes('HORA')) : 0;
+
+                for (let i = headerRowIdx + 1; i < data.length; i++) {
+                    const row1 = data[i];
+                    if (!row1 || row1.length === 0) continue;
+                    
+                    const horaRaw = String(row1[horaIdx] || "").trim();
+                    const timeMatch = horaRaw.match(/(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})/);
+                    if (!timeMatch) continue;
+                    const timeStr = `${timeMatch[1].padStart(5, '0')}-${timeMatch[2].padStart(5, '0')}`;
+                    
+                    let row2 = null;
+                    if (i + 1 < data.length) {
+                        const nextRowHora = String(data[i+1][horaIdx] || "").trim();
+                        if (!nextRowHora.match(/(\d{1,2}:\d{2})\s*[-–]/)) {
+                            row2 = data[i+1];
+                        }
+                    }
+
+                    for (const [day, colIdx] of Object.entries(dayCols)) {
+                        let cell1 = String(row1[colIdx] || "").trim();
+                        let cell2 = row2 ? String(row2[colIdx] || "").trim() : "";
+                        
+                        if (cell1 || cell2) {
+                            let sigla = "S/C";
+                            let grupo = "S/G";
+                            let materia = cell2 || cell1;
+
+                            if (cell1) {
+                                let lines = cell1.split('\n');
+                                let codePart = lines[0].trim();
+                                
+                                let parts = codePart.split(/\s+/);
+                                if (parts.length === 1) {
+                                    sigla = parts[0];
+                                } else if (parts.length > 1) {
+                                    let lastPart = parts[parts.length - 1];
+                                    if (lastPart.length <= 3 && /[0-9A-Z]/.test(lastPart)) {
+                                        grupo = lastPart;
+                                        sigla = parts.slice(0, parts.length - 1).join(" ");
+                                    } else {
+                                        sigla = codePart;
+                                    }
+                                }
+                                
+                                if (!cell2 && lines.length > 1) {
+                                    materia = lines.slice(1).join(" ").trim();
+                                } else if (!cell2) {
+                                    let match = codePart.match(/^([A-Z]{3}\s*\d{3})\s+(.*)$/i);
+                                    if (match) {
+                                        sigla = match[1];
+                                        materia = match[2];
+                                    }
+                                }
+                            }
+
+                            materia = materia.replace(/\n/g, ' ').trim();
+
+                            sessions.push({
+                                id: idCounter++,
+                                semestre: "S/N", 
+                                grupo: grupo,
+                                materia: materia, 
+                                sigla: sigla,
+                                docente: "S/D", 
+                                dia: day,
+                                horario: timeStr,
+                                aula: aulaName,
+                                choque: false 
+                            });
+                        }
+                    }
+                    if (row2) i++;
+                }
+            });
+            return { sessions, rooms: Array.from(foundRooms) };
+        };
+
+        const calculateConflicts = () => {
+            scheduleData.forEach(s => s.choque = false);
+            for (let i = 0; i < scheduleData.length; i++) {
+                for (let j = i + 1; j < scheduleData.length; j++) {
+                    const s1 = scheduleData[i];
+                    const s2 = scheduleData[j];
+                    if (s1.dia === s2.dia && checkTimeOverlap(s1.horario, s2.horario)) {
+                        if (s1.aula && s2.aula && s1.aula !== 'S/A' && s1.aula === s2.aula) {
+                            s1.choque = true;
+                            s2.choque = true;
+                        }
+                    }
+                }
+            }
+        };
+
+        const updateDashboardAndGroups = () => {
+            kpiTotal.textContent = scheduleData.length;
+            kpiRooms.textContent = allRoomsList.length;
+            
+            calculateConflicts();
+            const conflicts = scheduleData.filter(s => s.choque).length;
+            kpiConflicts.textContent = conflicts;
+
+            const mode = groupingModeSelect.value;
+            groupedData = {};
+            
+            if (mode === 'AULA') {
+                allRoomsList.forEach(r => groupedData[r] = []);
+            }
+
+            scheduleData.forEach(s => {
+                let key = mode === 'AULA' ? (s.aula || 'S/A') : `Grp ${s.grupo}`;
+                if(!groupedData[key]) groupedData[key] = [];
+                groupedData[key].push(s);
+            });
+
+            renderTabs();
+            
+            if(activeGroupTab && groupedData[activeGroupTab]) {
+                redrawGrid(activeGroupTab);
+            } else if(Object.keys(groupedData).length > 0) {
+                const keys = Object.keys(groupedData).sort();
+                activeGroupTab = keys[0];
+                redrawGrid(activeGroupTab);
+            } else {
+                scheduleTbody.innerHTML = `<tr><td colspan="7" class="py-20 text-slate-400 italic">No hay datos para mostrar.</td></tr>`;
+            }
+        };
+
+        // --- RENDERIZADO DE TABS Y GRILLA ---
+        const renderTabs = () => {
+            const keys = Object.keys(groupedData).sort((a, b) => {
+                const numA = parseInt(a.replace(/\D/g, ''));
+                const numB = parseInt(b.replace(/\D/g, ''));
+                if (!isNaN(numA) && !isNaN(numB) && numA !== numB) return numA - numB;
+                return a.localeCompare(b);
+            });
+
+            tabsContainer.innerHTML = '';
+            
+            keys.forEach(key => {
+                const groupSessions = groupedData[key];
+                const hasConflicts = groupSessions.some(s => s.choque);
+                
+                let errorClass = '';
+                let icon = groupingModeSelect.value === 'AULA' ? '🚪 ' : '👥 ';
+                
+                if (hasConflicts) {
+                    errorClass = 'has-error';
+                    icon = '🚨 ';
+                }
+
+                const btn = document.createElement('button');
+                btn.className = `tab flex-shrink-0 ${key === activeGroupTab ? 'active' : ''} ${errorClass}`;
+                btn.innerHTML = `${icon}${key}`;
+                btn.onclick = () => {
+                    activeGroupTab = key;
+                    renderTabs(); 
+                    redrawGrid(key);
+                };
+                tabsContainer.appendChild(btn);
+            });
+        };
+
+        const generateEmptyTimeGrid = () => {
+            const uniqueTimeSlots = new Set();
+            scheduleData.forEach(s => {
+                if (!s.horario.includes('-')) return;
+                const [start, end] = s.horario.split('-');
+                let current = new Date(`1970-01-01T${start}:00`);
+                const endTime = new Date(`1970-01-01T${end}:00`);
+                while(current < endTime){
+                    const slotStart = current.toTimeString().substring(0,5);
+                    current.setMinutes(current.getMinutes() + 45);
+                    const slotEnd = current.toTimeString().substring(0,5);
+                    uniqueTimeSlots.add(`${slotStart}-${slotEnd}`);
+                }
+            });
+
+            if (uniqueTimeSlots.size === 0) {
+                ["07:00-07:45", "07:45-08:30", "08:30-09:15", "09:15-10:00", "10:00-10:45", "10:45-11:30", "11:30-12:15", "12:15-13:00", "13:00-13:45", "13:45-14:30", "14:30-15:15", "15:15-16:00", "16:00-16:45", "16:45-17:30", "17:30-18:15", "18:15-19:00", "19:00-19:45", "19:45-20:30", "20:30-21:15", "21:15-22:00"].forEach(t => uniqueTimeSlots.add(t));
+            }
+
+            const sortedTimeSlots = Array.from(uniqueTimeSlots).sort();
+            scheduleTbody.innerHTML = '';
+            
+            sortedTimeSlots.forEach(slotText => {
+                const startTime = slotText.split('-')[0].trim();
+                const row = document.createElement('tr');
+                const cellClass = "py-1 sm:py-2 px-0.5 sm:px-1 text-[10px] sm:text-xs border border-slate-200 relative"; 
+                
+                row.innerHTML = `
+                    <td class="py-1 sm:py-2 px-0.5 sm:px-1 font-bold text-slate-600 text-[10px] sm:text-xs border-r border-slate-300 bg-slate-50 sticky left-0 z-5">${slotText}</td>
+                    <td data-day="LUNES" data-time="${startTime}" class="${cellClass}"></td>
+                    <td data-day="MARTES" data-time="${startTime}" class="${cellClass}"></td>
+                    <td data-day="MIERCOLES" data-time="${startTime}" class="${cellClass}"></td>
+                    <td data-day="JUEVES" data-time="${startTime}" class="${cellClass}"></td>
+                    <td data-day="VIERNES" data-time="${startTime}" class="${cellClass}"></td>
+                    <td data-day="SABADO" data-time="${startTime}" class="${cellClass}"></td>
+                `;
+                scheduleTbody.appendChild(row);
+            });
+        };
+
+        const redrawGrid = (groupKey) => {
+            generateEmptyTimeGrid();
+            const groupSessions = groupedData[groupKey] || [];
+            const mode = groupingModeSelect.value;
+            const uniqueSubjectNames = [...new Set(groupSessions.map(s => s.materia))];
+
+            groupSessions.forEach(session => {
+                let colorIndex = uniqueSubjectNames.indexOf(session.materia);
+                const bgColor = randomColors[colorIndex % randomColors.length];
+
+                if(!session.horario.includes('-')) return;
+                const [start, end] = session.horario.split('-');
+                let current = new Date(`1970-01-01T${start}:00`);
+                const endTime = new Date(`1970-01-01T${end}:00`);
+                
+                while(current < endTime){
+                    const slotStart = current.toTimeString().substring(0,5);
+                    const diaHtml = session.dia.replace('É','E').replace('Á','A').replace('Í','I').replace('Ó','O').replace('Ú','U');
+                    const cell = scheduleTbody.querySelector(`td[data-day="${diaHtml}"][data-time="${slotStart}"]`);
+                    
+                    if (cell) {
+                        const isUnassigned = !session.aula || session.aula === 'S/A';
+                        let pillClass = "bg-white border-slate-300 text-slate-700";
+                        let warningIcon = "";
+
+                        if (session.choque) {
+                            pillClass = "error hover:bg-red-200";
+                            warningIcon = "🚨 ";
+                        }
+
+                        let topText = mode === 'AULA' ? `Grp ${session.grupo}` : session.materia;
+                        let midText = mode === 'AULA' ? session.materia : session.sigla;
+                        let roomText = isUnassigned ? 'S/A' : session.aula;
+                        
+                        const currentHtml = cell.innerHTML;
+                        const newSubjectHtml = `
+                            <div class="subject-cell-content w-full h-full flex flex-col justify-center items-center leading-tight p-0.5 sm:p-1 overflow-hidden mb-1 rounded border border-black/5 shadow-sm" style="background-color: ${bgColor};">
+                                <span class="font-black block w-full text-center truncate text-[8px] sm:text-[9px] text-slate-800 uppercase" title="${session.materia}">${topText}</span>
+                                <span class="text-[7px] sm:text-[8px] opacity-80 block w-full text-center mt-0.5 truncate text-slate-700 font-medium">${midText}</span>
+                                <button class="room-pill ${pillClass} mt-1 w-full justify-center ${mode === 'AULA' ? 'no-export' : ''}" title="Reasignar Aula" data-session-id="${session.id}">
+                                    ${warningIcon}${roomText} <span class="no-export">✏️</span>
+                                </button>
+                            </div>
+                        `;
+
+                        cell.innerHTML = currentHtml + newSubjectHtml;
+                        
+                        const btn = cell.querySelector(`button[data-session-id="${session.id}"]`);
+                        if(btn) {
+                            btn.onclick = (e) => {
+                                e.stopPropagation(); 
+                                openAssignModal(session);
+                            };
+                        }
+                    }
+                    current.setMinutes(current.getMinutes() + 45);
+                }
+            });
+        };
+
+        groupingModeSelect.addEventListener('change', () => {
+            activeGroupTab = null; 
+            updateDashboardAndGroups();
+        });
+
+        // --- LÓGICA DEL MODAL DE ASIGNACIÓN ---
+        const openAssignModal = (session) => {
+            currentEditingSession = session;
+            
+            document.getElementById('modal-subject-name').textContent = session.materia;
+            document.getElementById('modal-sigla').textContent = session.sigla; 
+            document.getElementById('modal-group').textContent = `Grupo: ${session.grupo}`;
+            document.getElementById('modal-time').textContent = `${session.dia} ${session.horario}`;
+            document.getElementById('modal-time-ref').textContent = `${session.dia} ${session.horario}`;
+            document.getElementById('scope-single-text').textContent = session.dia;
+            
+            const curRoom = session.aula || 'S/A';
+            document.getElementById('modal-current-room').textContent = curRoom;
+            
+            inputManualRoom.value = curRoom !== 'S/A' ? curRoom : '';
+            document.getElementById('modal-warnings').classList.add('hidden');
+            document.querySelector('input[name="apply-scope"][value="single"]').checked = true;
+
+            renderAvailableRooms();
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        };
+
+        const renderAvailableRooms = () => {
+            listAvailableRooms.innerHTML = '';
+            const sessionDay = currentEditingSession.dia;
+            const sessionTime = currentEditingSession.horario;
+
+            let roomStatus = {};
+            allRoomsList.forEach(r => roomStatus[r] = []);
+
+            scheduleData.forEach(s => {
+                if (s.id !== currentEditingSession.id && s.aula && s.aula !== 'S/A') {
+                    if (s.dia === sessionDay && checkTimeOverlap(s.horario, sessionTime)) {
+                        if (!roomStatus[s.aula]) roomStatus[s.aula] = [];
+                        roomStatus[s.aula].push(s);
+                    }
+                }
+            });
+
+            let roomsList = allRoomsList.map(aula => {
+                return { aula: aula, occupants: roomStatus[aula] || [] };
+            });
+
+            roomsList = roomsList.filter(item => item.aula !== (currentEditingSession.aula || 'S/A'));
+
+            roomsList.sort((a, b) => {
+                if (a.occupants.length === 0 && b.occupants.length > 0) return -1;
+                if (a.occupants.length > 0 && b.occupants.length === 0) return 1;
+                return a.aula.localeCompare(b.aula);
+            });
+
+            if (roomsList.length === 0) {
+                listAvailableRooms.innerHTML = `<tr><td colspan="2" class="p-4 text-center text-slate-500 italic text-xs">No hay otras aulas registradas en el sistema.</td></tr>`;
+                return;
+            }
+
+            roomsList.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-blue-50 transition border-b border-slate-100";
+                
+                if (item.occupants.length === 0) {
+                    tr.innerHTML = `
+                        <td class="p-2 font-mono font-bold text-slate-700 text-[10px] sm:text-xs">
+                            ${item.aula} <span class="ml-1 text-[8px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Libre</span>
+                        </td>
+                        <td class="p-2 text-center">
+                            <button class="px-2 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 text-[9px] sm:text-[10px] font-bold rounded border border-green-300 transition w-full shadow-sm">Asignar</button>
+                        </td>
+                    `;
+                    tr.querySelector('button').onclick = () => saveAssignment(item.aula, false);
+                } else {
+                    let occNames = item.occupants.map(o => `${o.materia} (Grp ${o.grupo})`).join(', ');
+                    tr.innerHTML = `
+                        <td class="p-2 text-[10px] sm:text-xs overflow-hidden">
+                            <div class="font-mono font-bold text-slate-700">${item.aula}</div>
+                            <div class="text-[8px] sm:text-[9px] text-red-600 mt-0.5 leading-tight truncate w-full max-w-[150px] sm:max-w-[300px]" title="Ocupado por: ${occNames}">Ocupado: ${occNames}</div>
+                        </td>
+                        <td class="p-2 text-center">
+                            <button class="px-2 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 text-[9px] sm:text-[10px] font-bold rounded border border-orange-300 transition w-full shadow-sm" title="Intercambiar aulas">Cambiar</button>
+                        </td>
+                    `;
+                    tr.querySelector('button').onclick = () => {
+                        let oldAula = currentEditingSession.aula || 'S/A';
+                        let confirmMsg = `¿Estás seguro de intercambiar?\n\n- ${currentEditingSession.materia} pasará al ${item.aula}\n- ${occNames} pasará al ${oldAula}`;
+                        if(confirm(confirmMsg)) saveAssignment(item.aula, true);
+                    };
+                }
+                listAvailableRooms.appendChild(tr);
+            });
+        };
+
+        const saveAssignment = (newAulaText, forceSwap = false) => {
+            const newAula = newAulaText.trim().toUpperCase();
+            const scope = document.querySelector('input[name="apply-scope"]:checked').value;
+            const isUnassigning = (newAula === '' || newAula === 'S/A');
+            const warnBox = document.getElementById('modal-warnings');
+            
+            if (!isUnassigning && !allRoomsList.includes(newAula)) {
+                allRoomsList.push(newAula);
+            }
+
+            if (scope === 'single') {
+                const choqueObj = !isUnassigning ? scheduleData.filter(s => 
+                    s.id !== currentEditingSession.id && 
+                    s.aula === newAula && 
+                    s.dia === currentEditingSession.dia && 
+                    checkTimeOverlap(s.horario, currentEditingSession.horario)
+                ) : [];
+
+                if (choqueObj.length > 0 && !forceSwap) {
+                    let occNames = choqueObj.map(o => `${o.materia} (${o.grupo})`).join(', ');
+                    warnBox.innerHTML = `<strong>⚠️ CHOQUE:</strong> El aula ${newAula} está ocupada el ${currentEditingSession.dia} por <em>${occNames}</em>.<br>Haz clic en "Cambiar" en la lista para forzar el intercambio.`;
+                    warnBox.classList.remove('hidden');
+                    return;
+                }
+
+                const index = scheduleData.findIndex(s => s.id === currentEditingSession.id);
+                if (index !== -1) {
+                    let oldAula = scheduleData[index].aula || 'S/A';
+                    scheduleData[index].aula = isUnassigning ? 'S/A' : newAula;
+                    
+                    if (forceSwap && choqueObj.length > 0) {
+                        choqueObj.forEach(c => c.aula = oldAula);
+                    }
+                }
+            } else {
+                const relatedSessions = scheduleData.filter(s => 
+                    s.materia === currentEditingSession.materia && 
+                    s.grupo === currentEditingSession.grupo
+                );
+
+                let allConflicts = [];
+                if (!isUnassigning) {
+                    for(let s of relatedSessions) {
+                        const choques = scheduleData.filter(other => 
+                            other.id !== s.id && 
+                            !relatedSessions.some(rs => rs.id === other.id) &&
+                            other.aula === newAula && 
+                            other.dia === s.dia && 
+                            checkTimeOverlap(other.horario, s.horario)
+                        );
+                        if (choques.length > 0) {
+                            allConflicts.push({ session: s, choques: choques });
+                        }
+                    }
+                }
+
+                if (allConflicts.length > 0 && !forceSwap) {
+                    warnBox.innerHTML = `<strong>⚠️ CHOQUE:</strong> No se puede aplicar a todos los días porque el aula ${newAula} tiene clases en esos horarios.<br>Utiliza el botón "Cambiar" de la lista para forzar el trueque.`;
+                    warnBox.classList.remove('hidden');
+                    return;
+                }
+
+                relatedSessions.forEach(s => {
+                    let oldAula = s.aula || 'S/A';
+                    
+                    if (forceSwap && !isUnassigning) {
+                        const specificConflicts = allConflicts.find(c => c.session.id === s.id);
+                        if (specificConflicts) {
+                            specificConflicts.choques.forEach(conf => conf.aula = oldAula);
+                        }
+                    }
+                    
+                    s.aula = isUnassigning ? 'S/A' : newAula;
+                });
+            }
+            
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            
+            if(groupingModeSelect.value === 'AULA' && !isUnassigning) {
+                activeGroupTab = newAula;
+            }
+            
+            updateDashboardAndGroups();
+        };
+
+        // --- MOTOR DE OPTIMIZACIÓN (ALTA Y POCA DEMANDA) ---
+        const isAltaDemanda = (session) => {
+            const mat = normalizeString(session.materia);
+            const grp = normalizeString(session.grupo);
+            
+            if (grp.includes('3A') || grp.includes('3B')) {
+                if (mat.includes('NEUROPSICOLOGIA I') || mat.includes('ANALISIS EXPERIMENTAL') || mat.includes('PSICOANALISIS') || mat.includes('PSICOMETRICA')) return true;
+            }
+            if (grp.includes('4A') || grp.includes('4B')) {
+                if (mat.includes('COGNITIVA') || mat.includes('NEUROPSICOLOGIA II') || mat.includes('PSICOANALISIS') || mat.includes('COMPORTAMIENTO') || mat.includes('HUMANISTICA')) return true;
+            }
+            if (grp.includes('5A') || grp.includes('5B')) {
+                if (mat.includes('PSICOLINGUISTICA')) return true;
+            }
+            return false;
+        };
+
+        const autoOptimizeRooms = () => {
+            if (Object.keys(roomCapacities).length === 0) {
+                alert("Debes sincronizar el archivo 'capacidad_aula.xlsx' para que el sistema reconozca cuáles son las aulas grandes y pequeñas.");
+                return;
+            }
+
+            let logs = [];
+            let swapsCount = 0;
+
+            const bigRooms = Object.keys(roomCapacities).filter(r => roomCapacities[r] >= 61);
+            const smallRooms = Object.keys(roomCapacities).filter(r => roomCapacities[r] <= 60);
+
+            if (bigRooms.length === 0) {
+                alert("No se detectaron aulas grandes (capacidad >= 61) en la configuración actual.");
+                return;
+            }
+
+            const isRoomFree = (aula, dia, horario, ignoreId) => {
+                return !scheduleData.some(s => s.id !== ignoreId && s.aula === aula && s.dia === dia && checkTimeOverlap(s.horario, horario));
+            };
+
+            // 1. Alta Demanda a Aulas Grandes (Evaluando día por día independientemente)
+            scheduleData.filter(s => isAltaDemanda(s)).forEach(sAlta => {
+                let curCap = roomCapacities[sAlta.aula];
+                if (sAlta.aula === 'S/A' || curCap === undefined || curCap <= 60) {
+                    
+                    // a) Buscar aula grande libre en ese día/hora
+                    let freeBigRoom = bigRooms.find(r => isRoomFree(r, sAlta.dia, sAlta.horario, sAlta.id));
+                    if (freeBigRoom) {
+                        let oldRoom = sAlta.aula || 'S/A';
+                        sAlta.aula = freeBigRoom;
+                        swapsCount++;
+                        logs.push(`✅ <b>${sAlta.dia} ${sAlta.horario}:</b> <b>${sAlta.materia} (${sAlta.grupo})</b> se movió del ${oldRoom} al <b>${freeBigRoom}</b> (Aula Grande libre).`);
+                        return; 
+                    }
+
+                    // b) Si no hay libres, buscar aula grande ocupada por una materia que NO sea de Alta Demanda para hacer Trueque
+                    // Esto permite cruzarse con "Estadística" u otras materias de demanda regular/poca
+                    let occupant = scheduleData.find(sOther => 
+                        !isAltaDemanda(sOther) && 
+                        bigRooms.includes(sOther.aula) && 
+                        sOther.dia === sAlta.dia && 
+                        checkTimeOverlap(sOther.horario, sAlta.horario)
+                    );
+
+                    if (occupant) {
+                        let aulaGrande = occupant.aula;
+                        let aulaPequena = sAlta.aula; 
+                        
+                        let targetSmallRoom = aulaPequena;
+                        // Si el Alta Demanda estaba "S/A", buscamos una pequeña libre para el ocupante
+                        if (aulaPequena === 'S/A' || aulaPequena === '') {
+                            targetSmallRoom = smallRooms.find(r => isRoomFree(r, occupant.dia, occupant.horario, occupant.id)) || 'S/A';
+                        }
+
+                        sAlta.aula = aulaGrande;
+                        occupant.aula = targetSmallRoom;
+                        swapsCount++;
+                        logs.push(`🔄 <b>TRUEQUE (${sAlta.dia} ${sAlta.horario}):</b> <b>${sAlta.materia} (Grp ${sAlta.grupo})</b> subió al <b>${aulaGrande}</b>, y <b>${occupant.materia} (Grp ${occupant.grupo})</b> bajó al <b>${targetSmallRoom}</b>.`);
+                    }
+                }
+            });
+
+            // Hemos quitado el paso 2 de mover "Poca Demanda" proactivamente 
+            // para asegurar que las materias como "Estadística" conserven su Aula Grande
+            // los días donde no hay choques (como el día Viernes que mencionaste).
+
+            updateDashboardAndGroups();
+
+            const resultsList = document.getElementById('optimization-logs');
+            const resultsTitle = document.getElementById('optimization-title');
+
+            if (swapsCount > 0) {
+                resultsTitle.textContent = `¡Se realizaron ${swapsCount} mejoras automáticas!`;
+                resultsList.innerHTML = logs.map(l => `<div class="p-3 bg-slate-50 border-l-4 border-emerald-500 mb-2 text-xs sm:text-sm text-slate-700">${l}</div>`).join('');
+            } else {
+                resultsTitle.textContent = "Oferta Optimizada";
+                resultsList.innerHTML = `<div class="p-6 text-center text-slate-500 italic">No se requirió realizar trueques. Las materias de alta demanda ya están en aulas grandes para los días programados.</div>`;
+            }
+            
+            modalOpt.classList.remove('hidden');
+            modalOpt.classList.add('flex');
+        };
+
+        // --- LISTADO GENERAL ---
+        const renderTeachersTable = () => {
+            teachersTableBody.innerHTML = '';
+            const filterText = teacherSearch.value.toLowerCase();
+            
+            let filteredSessions = scheduleData.filter(s => {
+                return s.materia.toLowerCase().includes(filterText) ||
+                       s.sigla.toLowerCase().includes(filterText) ||
+                       (s.aula && s.aula.toLowerCase().includes(filterText));
+            });
+
+            filteredSessions.sort((a, b) => a.materia.localeCompare(b.materia));
+
+            if (filteredSessions.length === 0) {
+                teachersTableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-500 italic">No hay datos.</td></tr>`;
+                return;
+            }
+
+            filteredSessions.forEach(s => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition border-b border-slate-100";
+                const roomClass = (!s.aula || s.aula === 'S/A') ? "text-orange-600 bg-orange-50 border-orange-200" : (s.choque ? "text-red-600 bg-red-50 border-red-200" : "text-slate-700 bg-slate-100 border-slate-200");
+                
+                tr.innerHTML = `
+                    <td class="p-2 sm:p-3">
+                        <div class="font-bold text-slate-700 leading-tight">${s.materia}</div>
+                        <div class="text-[9px] sm:text-[10px] text-slate-500 bg-slate-200 inline-block px-1 rounded mt-0.5 font-bold">Grp ${s.grupo}</div>
+                    </td>
+                    <td class="p-2 sm:p-3 font-mono text-slate-600">${s.sigla}</td>
+                    <td class="p-2 sm:p-3">
+                        <div class="font-bold text-blue-700">${s.dia}</div>
+                        <div class="font-mono text-slate-500">${s.horario}</div>
+                    </td>
+                    <td class="p-2 sm:p-3 text-center">
+                        <span class="px-2 py-1 rounded font-bold border font-mono ${roomClass}">
+                            ${s.choque ? '⚠️ ' : ''}${s.aula || 'S/A'}
+                        </span>
+                    </td>
+                `;
+                teachersTableBody.appendChild(tr);
+            });
+        };
+
+        const prepareExportView = () => {
+            const clone = horarioPdfWrapper.cloneNode(true);
+            clone.id = 'export-clone';
+            clone.classList.add('export-mode');
+            clone.querySelectorAll('.no-export').forEach(el => el.style.display = 'none');
+            document.body.appendChild(clone);
+            return clone;
+        };
+
+        const cleanupExportView = (clone) => {
+            if (clone && clone.parentNode) clone.parentNode.removeChild(clone);
+        };
+
+        const exportToPdf = async () => {
+            if (!activeGroupTab) { alert("Sincroniza los datos primero."); return; }
+            const clone = prepareExportView(); 
+            try {
+                const canvas = await html2canvas(clone, { scale: 2, useCORS: true, windowWidth: 1400 });
+                const imgData = canvas.toDataURL("image/jpeg", 0.95);
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF("l", "mm", "a4"); 
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                
+                pdf.setFont("helvetica", "bold");
+                pdf.setFontSize(16);
+                const prefixTitle = groupingModeSelect.value === 'AULA' ? 'Aula:' : 'Horario:';
+                pdf.text(`${prefixTitle} ${activeGroupTab}`, pageWidth / 2, 15, { align: "center" });
+                
+                const margin = 10;
+                const headerHeight = 25; 
+                const availableWidth = pageWidth - (margin * 2);
+                const imgWidth = availableWidth; 
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                
+                let heightLeft = imgHeight;
+                let position = headerHeight;
+                
+                pdf.addImage(imgData, "JPEG", margin, position, imgWidth, imgHeight);
+                heightLeft -= (pageHeight - headerHeight);
+
+                while (heightLeft > 0) {
+                    position -= pageHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, "JPEG", margin, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+                pdf.save(`Horario_${activeGroupTab.replace(/\s+/g, '_')}.pdf`);
+            } catch (err) {
+                console.error(err); alert("Error al generar PDF.");
+            } finally {
+                cleanupExportView(clone);
+            }
+        };
+
+        const exportToImage = async () => {
+            if (!activeGroupTab) { alert("Sincroniza los datos primero."); return; }
+            const clone = prepareExportView(); 
+            try {
+                const canvas = await html2canvas(clone, { scale: 2, useCORS: true, windowWidth: 1400 });
+                const link = document.createElement('a');
+                link.download = `Horario_${activeGroupTab.replace(/\s+/g, '_')}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            } finally {
+                cleanupExportView(clone);
+            }
+        };
+
+        // --- FETCHING DATOS ---
+        const loadData = async () => {
+            btnSync.innerHTML = "⏳ Cargando...";
+            btnSync.disabled = true;
+
+            try {
+                // 1. Cargar Capacidades (REQUERIDO PARA OPTIMIZAR)
+                statusCapacidades.textContent = "Buscando...";
+                statusCapacidades.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600";
+                
+                let resCap = await fetch('capacidad_aula.xlsx').catch(() => null);
+                if (resCap && resCap.ok) {
+                    const bufCap = await resCap.arrayBuffer();
+                    const wbCap = XLSX.read(new Uint8Array(bufCap), { type: 'array' });
+                    const jsonCap = XLSX.utils.sheet_to_json(wbCap.Sheets[wbCap.SheetNames[0]]);
+                    processCapacidades(jsonCap);
+                    statusCapacidades.textContent = `✅ Listo (${Object.keys(roomCapacities).length})`;
+                    statusCapacidades.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700";
+                } else {
+                    statusCapacidades.textContent = "❌ No encontrado";
+                    statusCapacidades.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700";
+                }
+
+                // 2. Cargar Horarios "Maestro por Aula"
+                statusHorarios.textContent = "Buscando...";
+                statusHorarios.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600";
+                
+                let resHor = await fetch('horarios.xlsx').catch(() => null);
+                if (resHor && resHor.ok) {
+                    const bufHor = await resHor.arrayBuffer();
+                    const wbHor = XLSX.read(new Uint8Array(bufHor), { type: 'array' });
+                    
+                    const extracted = processHorariosVisual(wbHor);
+                    scheduleData = extracted.sessions;
+                    allRoomsList = extracted.rooms;
+
+                    statusHorarios.textContent = `✅ Listo (${allRoomsList.length} Aulas)`;
+                    statusHorarios.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700";
+                } else {
+                    statusHorarios.textContent = "❌ No encontrado";
+                    statusHorarios.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700";
+                }
+
+                updateDashboardAndGroups();
+
+            } catch(e) {
+                console.error(e);
+                alert("Error crítico al cargar los archivos.");
+            } finally {
+                btnSync.innerHTML = "<span>🔄</span> Cargar Excel";
+                btnSync.disabled = false;
+            }
+        };
+
+        // --- EVENT LISTENERS ---
+        btnSync.addEventListener('click', loadData);
+        btnOptimize.addEventListener('click', autoOptimizeRooms);
+
+        btnCloseModal.addEventListener('click', () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        });
+        btnCloseOpt.addEventListener('click', () => {
+            modalOpt.classList.add('hidden');
+            modalOpt.classList.remove('flex');
+        });
+        btnOkOpt.addEventListener('click', () => {
+            modalOpt.classList.add('hidden');
+            modalOpt.classList.remove('flex');
+        });
+
+        btnSaveManual.addEventListener('click', () => saveAssignment(inputManualRoom.value));
+
+        btnTeachers.addEventListener('click', () => {
+            if (scheduleData.length === 0) { alert("Sincroniza los datos primero."); return; }
+            teacherSearch.value = '';
+            renderTeachersTable();
+            modalTeachers.classList.remove('hidden');
+            modalTeachers.classList.add('flex');
+        });
+
+        btnCloseTeachers.addEventListener('click', () => {
+            modalTeachers.classList.add('hidden');
+            modalTeachers.classList.remove('flex');
+        });
+
+        teacherSearch.addEventListener('input', renderTeachersTable);
+        document.getElementById('export-img-btn').addEventListener('click', exportToImage);
+        document.getElementById('export-pdf-btn').addEventListener('click', exportToPdf);
+
+        // Iniciar carga automática
+        loadData();
+    });
+    </script>
+</body>
+</html>
