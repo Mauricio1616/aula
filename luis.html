@@ -1161,7 +1161,7 @@
                 statusHorarios.textContent = "Buscando...";
                 statusHorarios.className = "text-[9px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600";
                 
-                let resHor = await fetch('horarios.xlsx').catch(() => null);
+                let resHor = await fetch('Maestro por Aula 148-2.xlsx').catch(() => null);
                 if (resHor && resHor.ok) {
                     const bufHor = await resHor.arrayBuffer();
                     const wbHor = XLSX.read(new Uint8Array(bufHor), { type: 'array' });
